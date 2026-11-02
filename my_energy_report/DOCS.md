@@ -11,11 +11,12 @@
 
 - **Übersicht:** Kennzahlen, letzte Berichte, Verlauf der letzten Wochen.
 - **Berichte:** alle Berichte mit Vorschau, Download, erneutem Versand, Neu erstellen und Löschen.
-  „Bericht erstellen …“ erzeugt den Bericht für eine beliebige abgeschlossene Woche.
-- **Einstellungen:** Zeitplan (Wochentag, Uhrzeit), Anlagenname, Anlagenleistung, Aufbewahrung,
-  Sprache sowie die Empfänger für Push und E-Mail mit Testfunktion.
+  „Bericht erstellen …“ erzeugt einen Bericht für eine beliebige abgeschlossene Woche, einen Monat oder ein Jahr.
+- **Einstellungen:** Zeitpläne für Wochen-, Monats- und Jahresberichte, Anlagenname, Anlagenleistung,
+  Aufbewahrung der Wochenberichte, Sprache sowie die Empfänger für Push und E-Mail mit Testfunktion.
 
-Der Bericht umfasst immer die letzte abgeschlossene Woche (Mo–So). Die PDFs liegen unter
+Wochenberichte umfassen die letzte abgeschlossene Woche (Mo–So), Monatsberichte den vergangenen
+Kalendermonat (optional mit Vergleich zum Vorjahresmonat), Jahresberichte das vergangene Kalenderjahr. Die PDFs liegen unter
 `/media/my_energy_report` und sind auch im Medienbrowser sichtbar.
 
 ---

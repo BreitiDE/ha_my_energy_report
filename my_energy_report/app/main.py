@@ -1,4 +1,4 @@
-"""My Energy Report – Home-Assistant-App: Zeitplan, Berichtsliste, Versand."""
+"""My Energy Report – Home-Assistant-App: Zeitpläne, Berichtsliste, Versand."""
 
 import asyncio
 import json
@@ -13,21 +13,36 @@ from aiohttp import web
 import report
 from ha import HA, HAError
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 DATA = Path(os.environ.get("MER_DATA", "/data"))
 MEDIA = Path(os.environ.get("MER_MEDIA", "/media/my_energy_report"))
 MEDIA_ID = "media-source://media_source/local/my_energy_report"
 STATIC = Path(__file__).parent / "static"
 PORT = int(os.environ.get("MER_PORT", "8099"))
+ARTEN = ("week", "month", "year")
 
 log = logging.getLogger("my_energy_report")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 STANDARD = {
+    # Wochenbericht
     "enabled": True, "weekday": 0, "time": "06:30",
+    # Monatsbericht
+    "m_enabled": False, "m_day": 1, "m_time": "07:00", "m_prev_year": True,
+    # Jahresbericht
+    "y_enabled": False, "y_day": 1, "y_month": 1, "y_time": "07:30",
     "plant_name": "Zuhause", "kwp": None, "keep_weeks": 52, "language": "auto",
     "push": [], "email": [],
 }
+
+
+def _hm(text, standard="06:30"):
+    try:
+        h, m = (int(x) for x in str(text).split(":")[:2])
+        return h, m
+    except ValueError:
+        h, m = standard.split(":")
+        return int(h), int(m)
 
 
 class App:
@@ -58,10 +73,17 @@ class App:
             self.reports = json.loads((DATA / "reports.json").read_text())
         except (OSError, ValueError):
             self.reports = []
+        for r in self.reports:           # Berichte aus 1.0.0/1.0.1 sind Wochenberichte
+            r.setdefault("type", "week")
+        self.sortieren()
 
     def speichern(self):
         (DATA / "settings.json").write_text(json.dumps(self.settings, indent=1))
         (DATA / "reports.json").write_text(json.dumps(self.reports, indent=1))
+
+    def sortieren(self):
+        rang = {"year": 0, "month": 1, "week": 2}
+        self.reports.sort(key=lambda r: (r["bis"], -rang.get(r.get("type", "week"), 2)), reverse=True)
 
     def lang(self):
         s = self.settings.get("language", "auto")
@@ -85,44 +107,79 @@ class App:
             self.connected, self.ha_error = False, str(e)
             log.warning("Abgleich mit Home Assistant fehlgeschlagen: %s", e)
 
-    # ---------------- Zeitplan ----------------
-    def naechster_lauf(self, ab=None):
+    # ---------------- Zeitpläne ----------------
+    def plan_schluessel(self, typ):
         s = self.settings
-        if not s.get("enabled"):
-            return None
+        if typ == "week":
+            return (s.get("enabled"), s.get("weekday"), s.get("time"))
+        if typ == "month":
+            return (s.get("m_enabled"), s.get("m_day"), s.get("m_time"))
+        return (s.get("y_enabled"), s.get("y_day"), s.get("y_month"), s.get("y_time"))
+
+    def naechster_lauf(self, typ, ab=None):
+        s = self.settings
         jetzt = ab or datetime.now(self.tz)
-        h, m = (int(x) for x in s.get("time", "06:30").split(":"))
-        tag = jetzt.date() + timedelta(days=(int(s.get("weekday", 0)) - jetzt.weekday()) % 7)
-        lauf = datetime(tag.year, tag.month, tag.day, h, m, tzinfo=self.tz)
-        if lauf <= jetzt:
-            lauf += timedelta(days=7)
-        return lauf
+        mk = lambda d, hm: datetime(d.year, d.month, d.day, hm[0], hm[1], tzinfo=self.tz)
+        if typ == "week":
+            if not s.get("enabled"):
+                return None
+            tag = jetzt.date() + timedelta(days=(int(s.get("weekday", 0)) - jetzt.weekday()) % 7)
+            lauf = mk(tag, _hm(s.get("time"), "06:30"))
+            return lauf if lauf > jetzt else lauf + timedelta(days=7)
+        if typ == "month":
+            if not s.get("m_enabled"):
+                return None
+            tag = int(s.get("m_day", 1))
+            lauf = mk(date(jetzt.year, jetzt.month, tag), _hm(s.get("m_time"), "07:00"))
+            if lauf <= jetzt:
+                nm = report._monat_plus(date(jetzt.year, jetzt.month, 1), 1)
+                lauf = mk(date(nm.year, nm.month, tag), _hm(s.get("m_time"), "07:00"))
+            return lauf
+        if not s.get("y_enabled"):
+            return None
+        tag, monat = int(s.get("y_day", 1)), int(s.get("y_month", 1))
+        lauf = mk(date(jetzt.year, monat, tag), _hm(s.get("y_time"), "07:30"))
+        return lauf if lauf > jetzt else mk(date(jetzt.year + 1, monat, tag), _hm(s.get("y_time"), "07:30"))
 
     async def zeitplan(self):
-        schluessel, ziel = None, None
+        schluessel = {a: None for a in ARTEN}
+        ziel = {a: None for a in ARTEN}
         while True:
             await asyncio.sleep(20)
-            s = self.settings
             jetzt = datetime.now(self.tz)
-            neu = (s.get("enabled"), s.get("weekday"), s.get("time"), str(self.tz))
-            if neu != schluessel:
-                schluessel, ziel = neu, self.naechster_lauf(jetzt)
-            if ziel and jetzt >= ziel:
-                ziel = self.naechster_lauf(jetzt + timedelta(minutes=1))
-                heute = jetzt.date()
-                montag = heute - timedelta(days=heute.weekday() + 7)
-                log.info("Geplanter Bericht für die Woche ab %s", montag)
-                await self.erstellen(montag, versenden=True, ausloeser="schedule")
+            faellig = []
+            for typ in ARTEN:
+                neu = self.plan_schluessel(typ) + (str(self.tz),)
+                if neu != schluessel[typ]:
+                    schluessel[typ], ziel[typ] = neu, self.naechster_lauf(typ, jetzt)
+                if ziel[typ] and jetzt >= ziel[typ]:
+                    ziel[typ] = self.naechster_lauf(typ, jetzt + timedelta(minutes=1))
+                    faellig.append(typ)
+            for typ in faellig:
+                ref = report.letzte_periode(typ, jetzt.date())
+                log.info("Geplanter %s-Bericht für den Zeitraum ab %s", typ, ref)
+                await self.erstellen(typ, ref, vorjahr=bool(self.settings.get("m_prev_year")) if typ == "month" else False,
+                                     versenden=True, ausloeser="schedule")
 
     # ---------------- Bericht erstellen ----------------
-    async def erstellen(self, montag, versenden, ausloeser="manual"):
+    def dateiname(self, per, lang):
+        if per["typ"] == "week":
+            return (f"Energie-Bericht_KW{per['kw']:02d}_{per['jahr']}.pdf" if lang == "de"
+                    else f"Energy-Report_W{per['kw']:02d}_{per['jahr']}.pdf")
+        basis = "Energie-Bericht" if lang == "de" else "Energy-Report"
+        if per["typ"] == "month":
+            return f"{basis}_{per['jahr']}-{per['monat']:02d}.pdf"
+        return f"{basis}_{per['jahr']}.pdf"
+
+    async def erstellen(self, typ, ref, vorjahr=False, versenden=False, ausloeser="manual"):
         async with self.lock:
-            kw = montag.isocalendar()
-            rid = f"{kw[0]}-W{kw[1]:02d}"
+            per = report.periode(typ, ref, vorjahr)
+            rid = per["id"]
             self.running = rid
             lang = self.lang()
-            eintrag = {"id": rid, "kw": kw[1], "jahr": kw[0], "von": montag.isoformat(),
-                       "bis": (montag + timedelta(days=6)).isoformat(),
+            eintrag = {"id": rid, "type": typ, "kw": per.get("kw"), "jahr": per["jahr"], "monat": per.get("monat"),
+                       "von": per["start"].isoformat(), "bis": (per["ende"] - timedelta(days=1)).isoformat(),
+                       "prev_year": bool(per.get("vj")),
                        "created": datetime.now(self.tz).isoformat(timespec="seconds"),
                        "trigger": ausloeser, "status": "ok", "error": None, "kpi": {},
                        "file": None, "size": 0, "pages": 0, "sent": {}}
@@ -133,13 +190,17 @@ class App:
                 alle = [sid for kat in report.KATEGORIEN for sid in self.quellen[kat]]
                 if not alle:
                     raise HAError("Im Energie-Dashboard sind keine Quellen eingerichtet")
-                zr = report.zeitraum(montag, self.tz)
-                stat = await self.ha.statistik(alle, zr["vorwoche_start"], zr["ende"], "hour")
-                jahr = await self.ha.statistik(alle, zr["jahr_start"], zr["ende"], "month")
+                dt = lambda d: datetime(d.year, d.month, d.day, tzinfo=self.tz)
+                stats = {"cur": await self.ha.statistik(alle, dt(per["start"]), dt(per["ende"]), "hour"),
+                         "vor": await self.ha.statistik(alle, dt(per["vor"][0]), dt(per["vor"][1]), "hour")}
+                if per.get("vj"):
+                    stats["vj"] = await self.ha.statistik(alle, dt(per["vj"][0]), dt(per["vj"][1]), "hour")
+                monate = None
+                if typ != "year":
+                    monate = await self.ha.statistik(alle, dt(per["jahr_start"]), dt(per["ende"]), "month")
                 namen = await self.ha.namen(alle)
-                d = report.auswerten(stat, jahr, self.quellen, zr, self.tz, namen)
-                name = (f"Energie-Bericht_KW{kw[1]:02d}_{kw[0]}.pdf" if lang == "de"
-                        else f"Energy-Report_W{kw[1]:02d}_{kw[0]}.pdf")
+                d = report.auswerten(per, stats, monate, self.quellen, self.tz, namen)
+                name = self.dateiname(per, lang)
                 alt = next((r for r in self.reports if r["id"] == rid), None)
                 if alt and alt.get("file") and alt["file"] != name:
                     (MEDIA / alt["file"]).unlink(missing_ok=True)
@@ -153,7 +214,7 @@ class App:
                 log.exception("Bericht %s fehlgeschlagen", rid)
                 eintrag.update(status="error", error=str(e))
             self.reports = [r for r in self.reports if r["id"] != rid] + [eintrag]
-            self.reports.sort(key=lambda r: r["von"], reverse=True)
+            self.sortieren()
             self.aufraeumen()
             self.speichern()
             self.running = None
@@ -172,17 +233,18 @@ class App:
         if proc.returncode:
             log.warning("Vorschau für %s fehlgeschlagen: %s", rid, err.decode(errors="replace"))
             return 0
-        bilder = sorted(ziel.glob(f"{rid}-*.png"))
+        bilder = sorted(ziel.glob(f"{rid}-*.png"), key=lambda p: int(p.stem.rsplit("-", 1)[1]))
         for i, b in enumerate(bilder, 1):     # pdftoppm nummeriert je nach Seitenzahl mit 1 oder 01
             b.rename(ziel / f"{rid}-{i}.png")
         return len(bilder)
 
     def aufraeumen(self):
+        """Nur Wochenberichte werden nach der eingestellten Dauer gelöscht."""
         wochen = int(self.settings.get("keep_weeks") or 0)
         if wochen <= 0:
             return
         grenze = (date.today() - timedelta(weeks=wochen)).isoformat()
-        for r in [r for r in self.reports if r["von"] < grenze]:
+        for r in [r for r in self.reports if r.get("type", "week") == "week" and r["von"] < grenze]:
             self.loeschen(r["id"], speichern=False)
 
     def loeschen(self, rid, speichern=True):
@@ -208,17 +270,24 @@ class App:
         if k.get("pv") is not None:
             zeilen.append(("PV" if de else "Solar") + f" {f(k['pv'])} kWh")
         if k.get("verbrauch") is not None:
-            zeilen.append(("Verbrauch" if de else "Consumption") + f" {f(k['verbrauch'])} kWh"
-                          + (f" · Autarkie {f(k['autarkie'], 0)} %" if de and k.get("autarkie") is not None else "")
-                          + (f" · self-sufficiency {f(k['autarkie'], 0)} %" if not de and k.get("autarkie") is not None else ""))
+            zeile = ("Verbrauch" if de else "Consumption") + f" {f(k['verbrauch'])} kWh"
+            if k.get("autarkie") is not None:
+                zeile += (" · Autarkie " if de else " · self-sufficiency ") + f"{f(k['autarkie'], 0)} %"
+            zeilen.append(zeile)
         if k.get("bezug") is not None:
             zeilen.append(("Netzbezug" if de else "Grid import") + f" {f(k['bezug'])} kWh")
         if k.get("wasser") is not None:
             zeilen.append(("Wasser" if de else "Water") + f" {f(k['wasser'], 0)} L")
-        von = date.fromisoformat(r["von"])
-        bis = date.fromisoformat(r["bis"])
-        titel = (f"Energiebericht KW {r['kw']} ({von:%d.%m.}–{bis:%d.%m.%Y})" if de
-                 else f"Energy report week {r['kw']} ({von:%d/%m}–{bis:%d/%m/%Y})")
+        von, bis = date.fromisoformat(r["von"]), date.fromisoformat(r["bis"])
+        typ = r.get("type", "week")
+        if typ == "week":
+            titel = (f"Energiebericht KW {r['kw']} ({von:%d.%m.}–{bis:%d.%m.%Y})" if de
+                     else f"Energy report week {r['kw']} ({von:%d/%m}–{bis:%d/%m/%Y})")
+        elif typ == "month":
+            m = report.MONATE_LANG["de" if de else "en"][von.month - 1]
+            titel = f"Energiebericht {m} {von.year}" if de else f"Energy report {m} {von.year}"
+        else:
+            titel = f"Energiebericht {von.year}" if de else f"Energy report {von.year}"
         return titel, zeilen
 
     async def versenden(self, r, nur=None):
@@ -258,15 +327,17 @@ class App:
 
     # ---------------- Zustand für die Oberfläche ----------------
     def zustand(self):
-        nl = self.naechster_lauf()
-        belegt = sum(r.get("size", 0) for r in self.reports)
+        laeufe = {a: self.naechster_lauf(a) for a in ARTEN}
+        naechster = min(((v, a) for a, v in laeufe.items() if v), default=(None, None))
         return {
             "version": VERSION, "connected": self.connected, "ha_error": self.ha_error,
-            "settings": self.settings, "next_run": nl.isoformat() if nl else None,
+            "settings": self.settings,
+            "next_runs": {a: v.isoformat() if v else None for a, v in laeufe.items()},
+            "next_run": naechster[0].isoformat() if naechster[0] else None, "next_type": naechster[1],
             "running": self.running, "lang": self.lang(), "ha_lang": self.ha_lang,
             "sources": {k: len(v) for k, v in self.quellen.items()},
-            "targets": self.ziele, "storage": belegt, "folder": str(MEDIA),
-            "now": datetime.now(self.tz).isoformat(timespec="seconds"),
+            "targets": self.ziele, "storage": sum(r.get("size", 0) for r in self.reports),
+            "folder": str(MEDIA), "now": datetime.now(self.tz).isoformat(timespec="seconds"),
         }
 
 
@@ -322,16 +393,20 @@ def routen(app: App):
     @r.post("/api/reports")
     async def neu(request):
         body = await request.json()
+        typ = body.get("type", "week")
+        if typ not in ARTEN:
+            return fehler("Unbekannte Berichtsart")
         try:
-            montag = date.fromisoformat(body.get("week", ""))
+            ref = date.fromisoformat(body.get("period") or body.get("week") or "")
         except ValueError:
-            return fehler("Ungültige Woche")
-        montag -= timedelta(days=montag.weekday())
-        if montag + timedelta(days=7) > datetime.now(app.tz).date():
-            return fehler("Die Woche ist noch nicht abgeschlossen")
+            return fehler("Ungültiger Zeitraum")
+        per = report.periode(typ, ref)
+        if per["ende"] > datetime.now(app.tz).date():
+            return fehler("Der Zeitraum ist noch nicht abgeschlossen")
         if app.running:
             return fehler("Es wird gerade schon ein Bericht erstellt", 409)
-        eintrag = await app.erstellen(montag, bool(body.get("send")))
+        eintrag = await app.erstellen(typ, ref, vorjahr=typ == "month" and bool(body.get("prev_year")),
+                                      versenden=bool(body.get("send")))
         return web.json_response(eintrag)
 
     @r.delete("/api/reports/{rid}")
@@ -361,7 +436,10 @@ def routen(app: App):
 
     @r.get("/api/reports/{rid}/page/{n}")
     async def seite(request):
-        p = DATA / "pages" / f"{request.match_info['rid']}-{int(request.match_info['n'])}.png"
+        rid = request.match_info["rid"]
+        if "/" in rid or ".." in rid:
+            return fehler("Ungültige ID", 400)
+        p = DATA / "pages" / f"{rid}-{int(request.match_info['n'])}.png"
         if not p.exists():
             return fehler("Vorschau nicht vorhanden", 404)
         return web.FileResponse(p, headers={"Cache-Control": "no-cache"})
@@ -370,16 +448,27 @@ def routen(app: App):
     async def einstellungen(request):
         body = await request.json()
         s = dict(app.settings)
+
+        def zeit(wert):
+            h, m = (int(x) for x in str(wert).split(":")[:2])
+            if not (0 <= h < 24 and 0 <= m < 60):
+                raise ValueError
+            return f"{h:02d}:{m:02d}"
+
         try:
-            if "enabled" in body:
-                s["enabled"] = bool(body["enabled"])
+            for feld in ("enabled", "m_enabled", "y_enabled", "m_prev_year"):
+                if feld in body:
+                    s[feld] = bool(body[feld])
             if "weekday" in body:
                 s["weekday"] = int(body["weekday"]) % 7
-            if "time" in body:
-                h, m = (int(x) for x in str(body["time"]).split(":")[:2])
-                if not (0 <= h < 24 and 0 <= m < 60):
-                    raise ValueError
-                s["time"] = f"{h:02d}:{m:02d}"
+            for feld in ("time", "m_time", "y_time"):
+                if feld in body:
+                    s[feld] = zeit(body[feld])
+            for feld in ("m_day", "y_day"):
+                if feld in body:
+                    s[feld] = min(max(int(body[feld]), 1), 28)
+            if "y_month" in body:
+                s["y_month"] = min(max(int(body["y_month"]), 1), 12)
             if "plant_name" in body:
                 s["plant_name"] = str(body["plant_name"]).strip()[:60]
             if "kwp" in body:
@@ -396,6 +485,7 @@ def routen(app: App):
         except (TypeError, ValueError):
             return fehler("Ungültige Eingabe")
         app.settings = s
+        app.aufraeumen()
         app.speichern()
         return web.json_response(app.zustand())
 
@@ -424,6 +514,7 @@ def routen(app: App):
 
 
 async def starten(app: App):
+    import ha as ha_modul
     app.laden()
     await app.ha_abgleich()
     web_app = web.Application(middlewares=[schutz])
@@ -431,7 +522,6 @@ async def starten(app: App):
     runner = web.AppRunner(web_app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
-    import ha as ha_modul
     log.info("My Energy Report %s läuft auf Port %s (Token %s)", VERSION, PORT,
              "vorhanden" if ha_modul.TOKEN else "FEHLT")
 

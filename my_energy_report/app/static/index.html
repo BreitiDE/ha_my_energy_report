@@ -247,7 +247,7 @@ dialog::backdrop { background: rgba(11,11,11,.4); }
 .thumb img { width: 46px; height: 65px; object-fit: cover; object-position: top; display: block; }
 .thumb.ph { width: 48px; height: 67px; cursor: default; }
 td.th-cell { width: 64px; }
-.sent { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.sent { display: inline-flex; gap: 4px; flex-wrap: nowrap; justify-content: flex-end; }
 .pages { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
 .pages img { height: min(62vh, 640px); width: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; flex: none; }
 .targets { display: flex; flex-direction: column; gap: 8px; }
@@ -255,8 +255,9 @@ td.th-cell { width: 64px; }
 .sources { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .tip b { font-variant-numeric: tabular-nums; }
 .tip .row { display: flex; justify-content: space-between; gap: 14px; }
+.wk .t .badge { font-weight: 400; margin-left: 6px; vertical-align: 1px; }
 .wk .t, .wk .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
-#view-reports .table-wrap > table { min-width: 980px; }
+#view-reports .table-wrap > table { min-width: 1000px; }
 #view-start .table-wrap > table { min-width: 640px; }
 .donate { position: relative; display: inline-flex; }
 .donate .btn svg { color: var(--accent); }
@@ -264,6 +265,8 @@ td.th-cell { width: 64px; }
   background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 13px;
   opacity: 0; visibility: hidden; transition: opacity .15s; pointer-events: none; }
 .donate:hover .donate-tip, .donate:focus-within .donate-tip { opacity: 1; visibility: visible; }
+hr.sep { border: 0; border-top: 1px solid var(--grid); margin: 2px 0; width: 100%; }
+#typeSeg { align-self: flex-start; }
 .tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
 </style>
 </head>
@@ -312,7 +315,7 @@ td.th-cell { width: 64px; }
         <div class="card-head"><h2 id="h-last">Letzte Berichte</h2><span class="hint">neueste zuerst</span>
           <div class="right"><button class="btn small" data-view-link="reports">Alle Berichte</button></div></div>
         <div class="table-wrap"><table>
-          <thead><tr><th>Vorschau</th><th>Woche</th><th>Status</th><th class="num">PV</th><th class="num">Verbrauch</th><th class="num">Aktionen</th></tr></thead>
+          <thead><tr><th>Vorschau</th><th>Zeitraum</th><th>Status</th><th class="num">PV</th><th class="num">Verbrauch</th><th class="num">Aktionen</th></tr></thead>
           <tbody id="lastBody"><tr><td colspan="6" class="empty">lädt …</td></tr></tbody>
         </table></div>
       </section>
@@ -322,7 +325,10 @@ td.th-cell { width: 64px; }
       </section>
     </div>
     <section class="card" aria-labelledby="h-chart">
-      <div class="card-head"><h2 id="h-chart">Verlauf</h2><span class="hint">kWh je Woche aus den Berichten</span></div>
+      <div class="card-head"><h2 id="h-chart">Verlauf</h2><span class="hint">kWh je Zeitraum aus den Berichten</span>
+        <div class="right"><div class="seg" role="group" aria-label="Zeitraum" id="chartSeg">
+          <button data-c="week" aria-pressed="true">Wochen</button><button data-c="month" aria-pressed="false">Monate</button><button data-c="year" aria-pressed="false">Jahre</button>
+        </div></div></div>
       <div class="legend"><span><i style="background:var(--s1)"></i>PV-Erzeugung</span><span><i style="background:var(--s2)"></i>Hausverbrauch</span></div>
       <div class="chart" id="chart"><div class="empty">lädt …</div></div>
     </section>
@@ -338,10 +344,10 @@ td.th-cell { width: 64px; }
     <section class="card" aria-labelledby="h-reps">
       <div class="card-head"><h2 id="h-reps">Alle Berichte</h2><span class="hint">Klick auf die Vorschau zeigt alle Seiten</span>
         <div class="right"><div class="seg" role="group" aria-label="Filter" id="filterSeg">
-          <button data-f="all" aria-pressed="true">Alle</button><button data-f="ok" aria-pressed="false">Erstellt</button><button data-f="error" aria-pressed="false">Fehler</button>
+          <button data-f="all" aria-pressed="true">Alle</button><button data-f="week" aria-pressed="false">Woche</button><button data-f="month" aria-pressed="false">Monat</button><button data-f="year" aria-pressed="false">Jahr</button><button data-f="error" aria-pressed="false">Fehler</button>
         </div></div></div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Vorschau</th><th><button class="sort" id="sortBtn" aria-sort="descending">Woche ↓</button></th><th>Status</th>
+        <thead><tr><th>Vorschau</th><th><button class="sort" id="sortBtn" aria-sort="descending">Zeitraum ↓</button></th><th>Status</th>
           <th class="num">PV</th><th class="num">Verbrauch</th><th class="num">Autarkie</th><th class="num">Wasser</th><th class="num">Versand</th><th class="num">Aktionen</th></tr></thead>
         <tbody id="repBody"><tr><td colspan="9" class="empty">lädt …</td></tr></tbody>
       </table></div>
@@ -357,13 +363,36 @@ td.th-cell { width: 64px; }
         <section class="card" aria-labelledby="h-plan">
           <div class="card-head"><h2 id="h-plan">Zeitplan</h2></div>
           <form class="stack" id="planForm">
-            <label class="switch"><input type="checkbox" name="enabled"><span class="track"></span><span>Bericht automatisch erstellen</span></label>
-            <div class="form-grid">
-              <label class="f">Wochentag<select name="weekday"></select></label>
-              <label class="f">Uhrzeit<input type="time" name="time" required></label>
+            <div class="stack" style="gap:10px">
+              <label class="switch"><input type="checkbox" name="enabled"><span class="track"></span><span>Wochenbericht</span></label>
+              <div class="form-grid">
+                <label class="f">Wochentag<select name="weekday"></select></label>
+                <label class="f">Uhrzeit<input type="time" name="time" required></label>
+              </div>
+              <p class="hint" style="margin:0">Umfasst die letzte abgeschlossene Woche (Mo–So).</p>
             </div>
-            <p class="hint" style="margin:0">Der Bericht umfasst immer die letzte abgeschlossene Woche (Mo–So) und wird danach an die ausgewählten Empfänger verschickt.</p>
-            <div class="notice info" id="planPreview"></div>
+            <hr class="sep">
+            <div class="stack" style="gap:10px">
+              <label class="switch"><input type="checkbox" name="m_enabled"><span class="track"></span><span>Monatsbericht</span></label>
+              <div class="form-grid">
+                <label class="f">Tag im Monat<select name="m_day"></select></label>
+                <label class="f">Uhrzeit<input type="time" name="m_time" required></label>
+              </div>
+              <p class="hint" style="margin:0">Umfasst den vergangenen Kalendermonat.</p>
+              <label class="check"><input type="checkbox" name="m_prev_year"><span>Mit Vorjahresmonat vergleichen</span></label>
+            </div>
+            <hr class="sep">
+            <div class="stack" style="gap:10px">
+              <label class="switch"><input type="checkbox" name="y_enabled"><span class="track"></span><span>Jahresbericht</span></label>
+              <div class="form-grid">
+                <label class="f">Tag<select name="y_day"></select></label>
+                <label class="f">Monat<select name="y_month"></select></label>
+                <label class="f">Uhrzeit<input type="time" name="y_time" required></label>
+              </div>
+              <p class="hint" style="margin:0">Umfasst das vergangene Kalenderjahr.</p>
+            </div>
+            <div class="notice info stack" style="gap:2px;align-items:flex-start" id="planPreview"></div>
+            <p class="hint" style="margin:0">Jeder geplante Bericht wird danach an die ausgewählten Empfänger verschickt.</p>
             <div class="actions"><button class="btn primary" type="submit">Speichern</button></div>
           </form>
         </section>
@@ -391,8 +420,8 @@ td.th-cell { width: 64px; }
             <label class="f">Anlagenname<input type="text" name="plant_name" maxlength="60" placeholder="z. B. Zuhause"></label>
             <label class="f">Anlagenleistung (kWp)<input type="number" name="kwp" min="0" step="0.01" placeholder="z. B. 8,4"></label>
             <p class="hint" style="margin:-8px 0 0">Für den spezifischen Ertrag im Bericht. Leer lassen, wenn unbekannt.</p>
-            <label class="f">Aufbewahrung (Wochen)<input type="number" name="keep_weeks" min="0" max="520" required></label>
-            <p class="hint" style="margin:-8px 0 0">Ältere Berichte werden gelöscht. 0 behält alle.</p>
+            <label class="f">Aufbewahrung Wochenberichte (Wochen)<input type="number" name="keep_weeks" min="0" max="520" required></label>
+            <p class="hint" style="margin:-8px 0 0">Ältere Wochenberichte werden gelöscht. Monats- und Jahresberichte bleiben erhalten. 0 behält alle.</p>
             <label class="f">Sprache<select name="language"><option value="auto">Automatisch</option><option value="de">Deutsch</option><option value="en">English</option></select></label>
             <p class="hint" style="margin:-8px 0 0">Gilt für Oberfläche, PDF und Nachrichten.</p>
             <p class="field-err" id="repErr" hidden></p>
@@ -418,7 +447,12 @@ td.th-cell { width: 64px; }
     <div class="dlg-head"><h2 id="createTitle">Bericht erstellen</h2>
       <button class="icon-btn" type="button" data-close aria-label="Schließen" title="Schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
     <div class="dlg-body">
-      <label class="f">Woche<select name="week" id="weekSel"></select></label>
+      <div class="f">Art
+        <div class="seg" role="group" aria-label="Art" id="typeSeg">
+          <button type="button" data-t="week" aria-pressed="true">Woche</button><button type="button" data-t="month" aria-pressed="false">Monat</button><button type="button" data-t="year" aria-pressed="false">Jahr</button>
+        </div></div>
+      <label class="f"><span id="perLabel">Woche</span><select name="period" id="weekSel"></select></label>
+      <label class="check" id="prevRow"><input type="checkbox" name="prev_year" id="prevChk"><span>Mit Vorjahresmonat vergleichen</span></label>
       <label class="check"><input type="checkbox" name="send" id="sendChk"><span>Nach dem Erstellen versenden</span></label>
       <p class="hint" id="sendHint">An die Empfänger aus den Einstellungen.</p>
       <p class="field-err" id="createErr" hidden></p>
@@ -480,6 +514,9 @@ const loc = () => LANG === "en" ? "en-GB" : "de-DE";
 const fmt = (v, d = 1) => v == null ? "–" : new Intl.NumberFormat(loc(), { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
 const WD = () => LANG === "en" ? ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] : ["Mo","Di","Mi","Do","Fr","Sa","So"];
 const WD_LONG = () => LANG === "en" ? ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"] : ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
+const MON = () => LANG === "en" ? ["January","February","March","April","May","June","July","August","September","October","November","December"]
+  : ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+const MON_K = () => LANG === "en" ? ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"] : ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const p2 = n => String(n).padStart(2, "0");
 const wd = d => WD()[(d.getDay() + 6) % 7];
 const dm = d => LANG === "en" ? `${p2(d.getDate())}/${p2(d.getMonth() + 1)}` : `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.`;
@@ -489,6 +526,23 @@ const dt = s => { const d = new Date(s); return `${wd(d)} ${dm(d)} ${hm(d)}`; };
 const day = s => { const [y, m, dd] = s.split("-").map(Number); return new Date(y, m - 1, dd); };
 const range = r => { const a = day(r.von), b = day(r.bis); return `${dm(a)}–${dmy(b)}`; };
 const size = b => b < 1024 ? `${b} B` : b < 1048576 ? `${fmt(b / 1024, 0)} kB` : `${fmt(b / 1048576, 1)} MB`;
+const TYP = { week: "Woche", month: "Monat", year: "Jahr" };
+const TYP_BERICHT = { week: "Wochenbericht", month: "Monatsbericht", year: "Jahresbericht" };
+const typOf = r => r.type || "week";
+// Bezeichnung eines Berichts: „KW 44 · 26.10.–01.11.2026“, „Oktober 2026“, „Jahr 2025“
+function lab(r) {
+  const ty = typOf(r), a = day(r.von);
+  if (ty === "week") return `${t("KW")} ${r.kw} · ${range(r)}`;
+  if (ty === "month") return `${MON()[a.getMonth()]} ${a.getFullYear()}`;
+  return t("Jahr {j}", { j: a.getFullYear() });
+}
+const shortLab = r => typOf(r) === "week" ? `${t("KW")} ${r.kw}` : typOf(r) === "month" ? `${MON_K()[day(r.von).getMonth()]} ${day(r.von).getFullYear()}` : String(day(r.von).getFullYear());
+function idLab(id) {   // „2026-W44“, „2026-M10“, „2026-Y“
+  let m = /^(\d+)-W(\d+)$/.exec(id); if (m) return `${t("KW")} ${+m[2]}`;
+  m = /^(\d+)-M(\d+)$/.exec(id); if (m) return `${MON()[+m[2] - 1]} ${m[1]}`;
+  m = /^(\d+)-Y$/.exec(id); if (m) return t("Jahr {j}", { j: m[1] });
+  return id;
+}
 function rel(s) {
   const diff = (new Date(s) - Date.now()) / 60000, a = Math.abs(diff);
   const v = a < 1 ? null : a < 60 ? `${Math.round(a)} min` : a < 2880 ? `${Math.round(a / 60)} h` : `${Math.round(a / 1440)} ${t("Tagen")}`;
@@ -533,9 +587,10 @@ async function busy(btn, text, fn) {
 document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target.closest("[data-close]")) d.close(); }));
 
 // ---------------- Zustand ----------------
-let S = null, R = [], view = "start", filter = "all", sortAsc = false, page = 0, perPage = 25;
+let S = null, R = [], view = "start", filter = "all", sortAsc = false, page = 0, perPage = 25, chartType = "week";
 try { view = localStorage.getItem("mer-view") || "start"; filter = localStorage.getItem("mer-filter") || "all";
-  perPage = +localStorage.getItem("mer-per") || 25; } catch {}
+  perPage = +(localStorage.getItem("mer-per") ?? 25); chartType = localStorage.getItem("mer-chart") || "week"; } catch {}
+if (!["all", "week", "month", "year", "error"].includes(filter)) filter = "all";
 
 function show(v) {
   view = v; try { localStorage.setItem("mer-view", v); } catch {}
@@ -579,19 +634,22 @@ function sentHtml(r) {
 }
 function thumb(r) {
   if (r.status !== "ok" || !r.pages) return `<span class="thumb ph" aria-hidden="true"></span>`;
-  return `<button class="thumb" data-prev="${esc(r.id)}" aria-label="${esc(t("Vorschau von KW {kw}", { kw: r.kw }))}" title="${esc(t("Vorschau"))}"><img src="api/reports/${encodeURIComponent(r.id)}/page/1?v=${encodeURIComponent(r.created)}" alt="" loading="lazy"></button>`;
+  return `<button class="thumb" data-prev="${esc(r.id)}" aria-label="${esc(t("Vorschau von {b}", { b: lab(r) }))}" title="${esc(t("Vorschau"))}"><img src="api/reports/${encodeURIComponent(r.id)}/page/1?v=${encodeURIComponent(r.created)}" alt="" loading="lazy"></button>`;
 }
-function weekCell(r) {
+function periodCell(r, withType, badge) {
   const how = r.trigger === "schedule" ? t("Zeitplan") : t("manuell");
-  const sub = r.status === "ok" ? `${t("erstellt")} ${dt(r.created)} · ${how}` : esc(r.error || "");
-  return `<div class="wk"><div class="t">${t("KW")} ${r.kw} · ${range(r)}</div><div class="sub" title="${r.status === "ok" ? "" : esc(r.error || "")}">${sub}</div></div>`;
+  let sub = r.status === "ok" ? `${t("erstellt")} ${dt(r.created)} · ${how}` : esc(r.error || "");
+  if (withType) sub = `${t(TYP_BERICHT[typOf(r)])} · ${sub}`;
+  if (r.prev_year) sub += ` · ${t("mit Vorjahresmonat")}`;
+  const bd = badge ? ` <span class="badge${typOf(r) === "week" ? "" : " accent"}">${t(TYP[typOf(r)])}</span>` : "";
+  return `<div class="wk"><div class="t">${esc(lab(r))}${bd}</div><div class="sub" title="${r.status === "ok" ? "" : esc(r.error || "")}">${sub}</div></div>`;
 }
 function actions(r, full) {
   const id = encodeURIComponent(r.id), ok = r.status === "ok";
   let h = "";
   if (ok) h += `<a class="icon-btn" href="api/reports/${id}/pdf?download=1" download aria-label="${t("Herunterladen")}" title="${t("Herunterladen")}">${IC.dl}</a>`;
   if (full && ok) h += `<button class="icon-btn" data-send="${esc(r.id)}" aria-label="${t("Erneut senden")}" title="${t("Erneut senden")}">${IC.send}</button>`;
-  if (full) h += `<button class="icon-btn" data-redo="${esc(r.von)}" aria-label="${t("Neu erstellen")}" title="${t("Neu erstellen")}">${IC.redo}</button>`;
+  if (full) h += `<button class="icon-btn" data-redo="${esc(r.id)}" aria-label="${t("Neu erstellen")}" title="${t("Neu erstellen")}">${IC.redo}</button>`;
   if (full) h += `<button class="icon-btn danger" data-del="${esc(r.id)}" aria-label="${t("Löschen")}" title="${t("Löschen")}">${IC.del}</button>`;
   return `<span class="row-actions">${h}</span>`;
 }
@@ -599,12 +657,11 @@ const kwh = v => v == null ? `<span class="dimmed">–</span>` : `${fmt(v)} kWh`
 
 function render() {
   if (!S) return;
-  // Kopfzeile
   $("navCount").textContent = R.length;
   $("haDot").className = "dot " + (S.connected ? "ok" : "bad");
   $("haText").textContent = S.connected ? t("Mit Home Assistant verbunden") : t("Home Assistant nicht erreichbar");
   $("runState").hidden = !S.running;
-  if (S.running) $("runText").textContent = t("Erstelle Bericht {id} …", { id: S.running.replace(/^\d+-W/, t("KW") + " ") });
+  if (S.running) $("runText").textContent = t("Erstelle Bericht {id} …", { id: idLab(S.running) });
   $("haNotice").hidden = S.connected && Object.values(S.sources).some(Boolean);
   $("haNoticeText").textContent = !S.connected ? t("Home Assistant ist nicht erreichbar: {e}", { e: S.ha_error || "" })
     : t("Im Energie-Dashboard sind keine Quellen eingerichtet. Richte es unter Einstellungen → Dashboards → Energie ein.");
@@ -614,27 +671,35 @@ function render() {
   if (view === "settings") renderSettings();
 }
 
-function plan() {
-  if (!S.next_run) return t("Zeitplan aus");
-  return `${WD()[S.settings.weekday]} ${S.settings.time}`;
+// Zeitpläne als kurze Texte
+function plans(long) {
+  const s = S.settings, out = [];
+  if (s.enabled) out.push(`${t("Woche")} ${(long ? WD_LONG() : WD())[s.weekday]} ${s.time}`);
+  if (s.m_enabled) out.push(`${t("Monat")} ${t("am {d}.", { d: s.m_day })} ${s.m_time}`);
+  if (s.y_enabled) out.push(`${t("Jahr")} ${LANG === "en" ? `${p2(s.y_day)}/${p2(s.y_month)}` : `${p2(s.y_day)}.${p2(s.y_month)}.`} ${s.y_time}`);
+  return out;
 }
 
 function renderStart() {
   const ok = R.filter(r => r.status === "ok"), last = R.slice().sort((a, b) => b.created.localeCompare(a.created))[0];
-  const newest = ok[0], k = newest?.kpi || {};
-  const oldest = R.length ? R[R.length - 1] : null;
-  $("startFacts").innerHTML = `<span><b>${R.length}</b> ${t(R.length === 1 ? "Bericht" : "Berichte")}</span><span><b>${size(S.storage)}</b> ${t("belegt")}</span><span>${t("Zeitplan")}: <b>${esc(plan())}</b></span>`;
+  const newestWeek = ok.find(r => typOf(r) === "week"), k = newestWeek?.kpi || {};
+  const oldest = R.length ? R.reduce((a, b) => a.von < b.von ? a : b) : null;
+  const pl = plans(false);
+  $("startFacts").innerHTML = `<span><b>${R.length}</b> ${t(R.length === 1 ? "Bericht" : "Berichte")}</span><span><b>${size(S.storage)}</b> ${t("belegt")}</span>`
+    + `<span>${t("Zeitplan")}: <b>${esc(pl.length ? pl.join(" · ") : t("aus"))}</b></span>`;
   const nTargets = (S.settings.push || []).length + (S.settings.email || []).length;
-  const sentErr = newest && Object.values(newest.sent || {}).some(v => v !== "ok");
+  const lastOk = ok.slice().sort((a, b) => b.created.localeCompare(a.created))[0];
+  const sentErr = lastOk && Object.values(lastOk.sent || {}).some(v => v !== "ok");
   const pvDelta = k.pv != null && k.pv_vw ? (k.pv / k.pv_vw - 1) * 100 : null;
+  const cnt = ty => R.filter(r => typOf(r) === ty).length;
   const kpis = [
-    ["", t("Berichte"), R.length, oldest ? t("seit {d}", { d: dmy(day(oldest.von)) }) : t("noch keiner erstellt")],
-    [last && last.status !== "ok" ? "bad" : "", t("Letzter Bericht"), last ? `${t("KW")} ${last.kw}` : "–",
+    ["", t("Berichte"), R.length, R.length ? t("{w} Woche · {m} Monat · {y} Jahr", { w: cnt("week"), m: cnt("month"), y: cnt("year") }) : t("noch keiner erstellt")],
+    [last && last.status !== "ok" ? "bad" : "", t("Letzter Bericht"), last ? shortLab(last) : "–",
       last ? (last.status === "ok" ? `${dt(last.created)} · ${rel(last.created)}` : t("Fehler: {e}", { e: last.error || "" })) : t("noch keiner erstellt")],
     [S.running ? "accent" : "", t("Nächster Lauf"), S.running ? t("läuft") : S.next_run ? `${wd(new Date(S.next_run))} ${dm(new Date(S.next_run))}` : t("aus"),
-      S.next_run ? `${hm(new Date(S.next_run))} · ${rel(S.next_run)}` : t("Zeitplan ausgeschaltet")],
+      S.next_run ? `${t(TYP[S.next_type])} · ${hm(new Date(S.next_run))} · ${rel(S.next_run)}` : t("Zeitplan ausgeschaltet")],
     ["", t("PV letzte Woche"), k.pv != null ? `${fmt(k.pv)} kWh` : "–",
-      pvDelta != null ? t("{p} zur Vorwoche", { p: (pvDelta >= 0 ? "+" : "") + fmt(pvDelta, 0) + " %" }) : (newest ? `${t("KW")} ${newest.kw}` : "–")],
+      pvDelta != null ? t("{p} zur Vorwoche", { p: (pvDelta >= 0 ? "+" : "") + fmt(pvDelta, 0) + " %" }) : (newestWeek ? `${t("KW")} ${newestWeek.kw}` : "–")],
     ["", t("Autarkie"), k.autarkie != null ? `${fmt(k.autarkie, 0)} %` : "–",
       k.verbrauch != null ? t("Verbrauch {v} kWh", { v: fmt(k.verbrauch) }) : "–"],
     [sentErr ? "bad" : "", t("Empfänger"), nTargets,
@@ -642,30 +707,33 @@ function renderStart() {
   ];
   $("kpis").innerHTML = kpis.map(([c, l, v, s]) => `<div class="card kpi ${c}"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join("");
 
-  const rows = R.slice(0, 5);
-  $("lastBody").innerHTML = rows.length ? rows.map(r => `<tr><td class="th-cell">${thumb(r)}</td><td>${weekCell(r)}</td><td>${statusPill(r)}</td>
+  const rows = R.slice().sort((a, b) => b.created.localeCompare(a.created)).slice(0, 5);
+  $("lastBody").innerHTML = rows.length ? rows.map(r => `<tr><td class="th-cell">${thumb(r)}</td><td>${periodCell(r, true)}</td><td>${statusPill(r)}</td>
     <td class="num">${kwh(r.kpi?.pv)}</td><td class="num">${kwh(r.kpi?.verbrauch)}</td><td class="num">${actions(r, false)}</td></tr>`).join("")
     : `<tr><td colspan="6" class="empty">${t("Noch keine Berichte. Erstelle einen mit „Bericht erstellen“.")}</td></tr>`;
 
-  const tz = S.settings;
+  const tz = S.settings, plL = plans(true);
   $("statusKv").innerHTML = `
     <dt>${t("Home Assistant")}</dt><dd>${S.connected ? `<span class="pill ok">${t("verbunden")}</span>` : `<span class="pill bad">${t("getrennt")}</span>`}</dd>
     <dt>${t("Quellen")}</dt><dd>${sourcesHtml()}</dd>
-    <dt>${t("Zeitplan")}</dt><dd>${S.next_run ? esc(`${WD_LONG()[tz.weekday]}, ${tz.time}`) : `<span class="pill">${t("aus")}</span>`}</dd>
+    <dt>${t("Zeitplan")}</dt><dd>${plL.length ? plL.map(esc).join("<br>") : `<span class="pill">${t("aus")}</span>`}</dd>
     <dt>${t("Push")}</dt><dd>${(tz.push || []).length ? esc(tz.push.map(nameOf).join(", ")) : `<span class="dimmed">–</span>`}</dd>
     <dt>${t("E-Mail")}</dt><dd>${(tz.email || []).length ? esc(tz.email.map(nameOf).join(", ")) : `<span class="dimmed">–</span>`}</dd>
     <dt>${t("Ablage")}</dt><dd><code>${esc(S.folder)}</code></dd>`;
+  document.querySelectorAll("#chartSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.c === chartType));
   chart();
 }
 const nameOf = id => (S.targets.email.find(x => x.id === id) || S.targets.push.find(x => x.id === id) || {}).name || id;
+$("chartSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; chartType = b.dataset.c;
+  try { localStorage.setItem("mer-chart", chartType); } catch {} renderStart(); };
 
 function chart() {
-  const data = R.filter(r => r.status === "ok").slice(0, 12).reverse();
+  const data = R.filter(r => r.status === "ok" && typOf(r) === chartType).slice(0, 12).reverse();
   const el = $("chart");
-  if (data.length < 2) { el.innerHTML = `<div class="empty">${t("Der Verlauf erscheint ab zwei Berichten.")}</div>`; return; }
-  const W = Math.max(el.clientWidth, 300), H = 220, L = 40, B = 24, T = 8, pw = W - L - 8, ph = H - B - T;
+  if (data.length < 2) { el.innerHTML = `<div class="empty">${t("Der Verlauf erscheint ab zwei Berichten dieser Art.")}</div>`; return; }
+  const W = Math.max(el.clientWidth, 300), H = 220, L = 44, B = 24, T = 8, pw = W - L - 8, ph = H - B - T;
   const max = Math.max(...data.flatMap(r => [r.kpi.pv || 0, r.kpi.verbrauch || 0]), 1);
-  const step = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(s => max / s <= 4) || 2000;
+  const step = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000].find(s => max / s <= 4) || 10000;
   const top = Math.ceil(max / step) * step, y = v => T + ph - ph * v / top;
   let g = "";
   for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}" stroke="var(${v ? "--grid" : "--axis"})"/><text class="tick" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(v, 0)}</text>`;
@@ -675,37 +743,42 @@ function chart() {
   data.forEach((r, i) => {
     const cx = L + slot * i + slot / 2;
     g += bar(cx - bw - 1, r.kpi.pv, "--s1") + bar(cx + 1, r.kpi.verbrauch, "--s2");
-    const lab = slot < 46 ? String(r.kw) : `${t("KW")} ${r.kw}`, every = Math.ceil(24 / slot);
-    if ((data.length - 1 - i) % every === 0) g += `<text class="tick" x="${cx}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
+    const full = shortLab(r), short = chartType === "week" ? String(r.kw) : chartType === "month" ? MON_K()[day(r.von).getMonth()] : full;
+    const lb = slot < 56 ? short : full, every = Math.ceil(24 / slot);
+    if ((data.length - 1 - i) % every === 0) g += `<text class="tick" x="${cx}" y="${H - 6}" text-anchor="middle">${esc(lb)}</text>`;
     g += `<rect x="${L + slot * i}" y="${T}" width="${slot}" height="${ph}" fill="transparent" data-i="${i}"/>`;
   });
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t("PV-Erzeugung und Hausverbrauch je Woche"))}">${g}</svg><div class="tip" id="tip"></div>`;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t("PV-Erzeugung und Hausverbrauch je Zeitraum"))}">${g}</svg><div class="tip" id="tip"></div>`;
   const tip = $("tip");
   el.querySelectorAll("rect[data-i]").forEach(rc => {
-    const show = () => { const r = data[+rc.dataset.i], box = el.getBoundingClientRect(), b = rc.getBoundingClientRect();
-      tip.innerHTML = `<div class="t">${t("KW")} ${r.kw} · ${range(r)}</div>
+    const showTip = () => { const r = data[+rc.dataset.i], box = el.getBoundingClientRect(), b = rc.getBoundingClientRect();
+      tip.innerHTML = `<div class="t">${esc(lab(r))}</div>
         <div class="row"><span><i style="background:var(--s1)"></i>${t("PV-Erzeugung")}</span><b>${kwh(r.kpi.pv)}</b></div>
         <div class="row"><span><i style="background:var(--s2)"></i>${t("Hausverbrauch")}</span><b>${kwh(r.kpi.verbrauch)}</b></div>`;
       tip.style.display = "block";
       const x = Math.min(Math.max(b.left - box.left + b.width / 2 - tip.offsetWidth / 2, 0), box.width - tip.offsetWidth);
       tip.style.left = x + "px"; tip.style.top = "0px"; };
-    rc.addEventListener("mouseenter", show); rc.addEventListener("click", show);
+    rc.addEventListener("mouseenter", showTip); rc.addEventListener("click", showTip);
     rc.addEventListener("mouseleave", () => tip.style.display = "none");
   });
 }
 
 function renderReports() {
   const ok = R.filter(r => r.status === "ok").length;
-  $("repFacts").innerHTML = `<span><b>${R.length}</b> ${t(R.length === 1 ? "Bericht" : "Berichte")}</span><span><b>${size(S.storage)}</b> ${t("belegt")}</span>`
+  const cnt = ty => R.filter(r => typOf(r) === ty).length;
+  $("repFacts").innerHTML = `<span><b>${R.length}</b> ${t(R.length === 1 ? "Bericht" : "Berichte")}</span>`
+    + `<span><b>${cnt("week")}</b> ${t("Woche")} · <b>${cnt("month")}</b> ${t("Monat")} · <b>${cnt("year")}</b> ${t("Jahr")}</span>`
+    + `<span><b>${size(S.storage)}</b> ${t("belegt")}</span>`
     + (R.length - ok ? `<span><span class="dot bad"></span> <b>${R.length - ok}</b> ${t("mit Fehler")}</span>` : "");
   document.querySelectorAll("#filterSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.f === filter));
-  let list = R.filter(r => filter === "all" || r.status === filter);
+  let list = R.filter(r => filter === "all" || (filter === "error" ? r.status === "error" : typOf(r) === filter));
   if (sortAsc) list = list.slice().reverse();
-  $("sortBtn").textContent = t("Woche") + (sortAsc ? " ↑" : " ↓"); $("sortBtn").setAttribute("aria-sort", sortAsc ? "ascending" : "descending");
+  $("sortBtn").textContent = t("Zeitraum") + (sortAsc ? " ↑" : " ↓"); $("sortBtn").setAttribute("aria-sort", sortAsc ? "ascending" : "descending");
   const per = perPage || list.length || 1, pages = Math.max(1, Math.ceil(list.length / per));
   page = Math.min(page, pages - 1);
   const rows = list.slice(page * per, page * per + per);
-  $("repBody").innerHTML = rows.length ? rows.map(r => `<tr><td class="th-cell">${thumb(r)}</td><td>${weekCell(r)}</td><td>${statusPill(r)}</td>
+  $("repBody").innerHTML = rows.length ? rows.map(r => `<tr><td class="th-cell">${thumb(r)}</td><td>${periodCell(r, false, true)}</td>
+      <td>${statusPill(r)}</td>
       <td class="num">${kwh(r.kpi?.pv)}</td><td class="num">${kwh(r.kpi?.verbrauch)}</td>
       <td class="num">${r.kpi?.autarkie != null ? fmt(r.kpi.autarkie, 0) + " %" : '<span class="dimmed">–</span>'}</td>
       <td class="num">${r.kpi?.wasser != null ? fmt(r.kpi.wasser, 0) + " L" : '<span class="dimmed">–</span>'}</td>
@@ -731,16 +804,16 @@ document.addEventListener("click", async e => {
   if (pv) return preview(pv.dataset.prev);
   if (sd) { const r = R.find(x => x.id === sd.dataset.send);
     try { await busy(sd, "…", () => api(`reports/${encodeURIComponent(r.id)}/send`, { method: "POST", body: {} }));
-      toast(t("KW {kw} verschickt", { kw: r.kw })); load(); } catch (err) { toast(err.message, true); } }
+      toast(t("{b} verschickt", { b: shortLab(r) })); load(); } catch (err) { toast(err.message, true); } }
   if (dl) { const r = R.find(x => x.id === dl.dataset.del);
-    if (!await ask(t("Bericht löschen?"), t("Der Bericht für KW {kw} ({r}) wird endgültig gelöscht.", { kw: r.kw, r: range(r) }), t("Löschen"), true)) return;
+    if (!await ask(t("Bericht löschen?"), t("Der {art} „{b}“ wird endgültig gelöscht.", { art: t(TYP_BERICHT[typOf(r)]), b: lab(r) }), t("Löschen"), true)) return;
     try { await api(`reports/${encodeURIComponent(r.id)}`, { method: "DELETE" }); toast(t("Bericht gelöscht")); load(); } catch (err) { toast(err.message, true); } }
-  if (rd) openCreate(rd.dataset.redo);
+  if (rd) { const r = R.find(x => x.id === rd.dataset.redo); openCreate(typOf(r), r.von, !!r.prev_year); }
 });
 
 function preview(id) {
   const r = R.find(x => x.id === id); if (!r) return;
-  $("prevTitle").textContent = `${t("KW")} ${r.kw} · ${range(r)}`;
+  $("prevTitle").textContent = `${t(TYP_BERICHT[typOf(r)])} · ${lab(r)}`;
   $("prevPages").innerHTML = Array.from({ length: r.pages }, (_, i) =>
     `<img src="api/reports/${encodeURIComponent(r.id)}/page/${i + 1}?v=${encodeURIComponent(r.created)}" alt="${esc(t("Seite {n}", { n: i + 1 }))}">`).join("");
   $("prevInfo").textContent = `${t("{n} Seiten", { n: r.pages })} · ${size(r.size)} · ${r.file}`;
@@ -750,36 +823,56 @@ function preview(id) {
 }
 
 // ---------------- Bericht erstellen ----------------
-function weeks() {
-  const now = new Date(), d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7);
-  return Array.from({ length: 26 }, (_, i) => { const m = new Date(d); m.setDate(d.getDate() - 7 * i); return m; });
-}
 const iso = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 function isoWeek(d) { const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 3)); const y0 = new Date(Date.UTC(x.getUTCFullYear(), 0, 4));
   return 1 + Math.round(((x - y0) / 864e5 - 3 + ((y0.getUTCDay() + 6) % 7)) / 7); }
-function openCreate(von) {
-  const have = new Set(R.map(r => r.von));
-  $("weekSel").innerHTML = weeks().map(m => { const e = new Date(m); e.setDate(m.getDate() + 6);
-    return `<option value="${iso(m)}">${t("KW")} ${isoWeek(m)} · ${dm(m)}–${dmy(e)}${have.has(iso(m)) ? " · " + t("vorhanden") : ""}</option>`; }).join("");
-  if (von) $("weekSel").value = von;
+// Abgeschlossene Zeiträume als [Startdatum, Text]
+function periods(ty) {
+  const now = new Date(), today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (ty === "week") {
+    const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7);
+    return Array.from({ length: 53 }, (_, i) => { const m = new Date(d); m.setDate(d.getDate() - 7 * i); const e = new Date(m); e.setDate(m.getDate() + 6);
+      return [iso(m), `${t("KW")} ${isoWeek(m)} · ${dm(m)}–${dmy(e)}`]; });
+  }
+  if (ty === "month") return Array.from({ length: 36 }, (_, i) => { const m = new Date(today.getFullYear(), today.getMonth() - 1 - i, 1);
+    return [iso(m), `${MON()[m.getMonth()]} ${m.getFullYear()}`]; });
+  return Array.from({ length: 10 }, (_, i) => { const y = today.getFullYear() - 1 - i; return [`${y}-01-01`, String(y)]; });
+}
+const PER_LABEL = { week: "Woche", month: "Monat", year: "Jahr" };
+let cType = "week";
+function fillPeriods(ty, sel) {
+  cType = ty;
+  document.querySelectorAll("#typeSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.t === ty));
+  $("perLabel").textContent = t(PER_LABEL[ty]);
+  const have = new Set(R.filter(r => typOf(r) === ty).map(r => r.von));
+  $("weekSel").innerHTML = periods(ty).map(([v, l]) => `<option value="${v}">${esc(l)}${have.has(v) ? " · " + t("vorhanden") : ""}</option>`).join("");
+  if (sel) $("weekSel").value = sel;
+  $("prevRow").hidden = ty !== "month";
+  updCreate();
+}
+function openCreate(ty = "week", von, prev) {
   const n = (S.settings.push || []).length + (S.settings.email || []).length;
   $("sendChk").checked = false; $("sendChk").disabled = !n;
   $("sendHint").textContent = n ? t("An {p} Push- und {m} E-Mail-Empfänger aus den Einstellungen.", { p: (S.settings.push || []).length, m: (S.settings.email || []).length })
     : t("Lege zuerst unter Einstellungen → Versand Empfänger fest.");
-  $("createErr").hidden = true; updCreate();
+  $("prevChk").checked = prev ?? !!S.settings.m_prev_year;
+  $("createErr").hidden = true;
+  fillPeriods(ty, von);
   $("createDlg").showModal(); $("weekSel").focus();
 }
-function updCreate() { const have = R.some(r => r.von === $("weekSel").value);
+function updCreate() { const have = R.some(r => typOf(r) === cType && r.von === $("weekSel").value);
   $("createInfo").textContent = have ? t("Der vorhandene Bericht wird ersetzt.") : ""; }
+$("typeSeg").onclick = e => { const b = e.target.closest("button"); if (b) fillPeriods(b.dataset.t); };
 $("weekSel").onchange = updCreate;
 document.querySelectorAll("[data-create]").forEach(b => b.onclick = () => openCreate());
 $("createForm").onsubmit = async e => {
   e.preventDefault();
   try {
-    const r = await busy($("createBtn"), t("erstelle …"), () => api("reports", { method: "POST", body: { week: $("weekSel").value, send: $("sendChk").checked } }));
+    const body = { type: cType, period: $("weekSel").value, send: $("sendChk").checked, prev_year: cType === "month" && $("prevChk").checked };
+    const r = await busy($("createBtn"), t("erstelle …"), () => api("reports", { method: "POST", body }));
     $("createDlg").close();
-    if (r.status === "ok") toast(t("Bericht KW {kw} erstellt", { kw: r.kw })); else toast(t("Bericht fehlgeschlagen: {e}", { e: r.error }), true);
+    if (r.status === "ok") toast(t("{b} erstellt", { b: `${t(TYP_BERICHT[typOf(r)])} ${shortLab(r)}` }));
+    else toast(t("Bericht fehlgeschlagen: {e}", { e: r.error }), true);
     load();
   } catch (err) { $("createErr").textContent = err.message; $("createErr").hidden = false; }
 };
@@ -788,7 +881,12 @@ $("createForm").onsubmit = async e => {
 function fillForms() {
   const s = S.settings, pf = $("planForm"), rf = $("repForm");
   pf.weekday.innerHTML = WD_LONG().map((n, i) => `<option value="${i}">${n}</option>`).join("");
+  const tage = Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}">${i + 1}.</option>`).join("");
+  pf.m_day.innerHTML = tage; pf.y_day.innerHTML = tage;
+  pf.y_month.innerHTML = MON().map((n, i) => `<option value="${i + 1}">${n}</option>`).join("");
   pf.enabled.checked = !!s.enabled; pf.weekday.value = s.weekday; pf.time.value = s.time;
+  pf.m_enabled.checked = !!s.m_enabled; pf.m_day.value = s.m_day; pf.m_time.value = s.m_time; pf.m_prev_year.checked = !!s.m_prev_year;
+  pf.y_enabled.checked = !!s.y_enabled; pf.y_day.value = s.y_day; pf.y_month.value = s.y_month; pf.y_time.value = s.y_time;
   rf.plant_name.value = s.plant_name || ""; rf.kwp.value = s.kwp ?? ""; rf.keep_weeks.value = s.keep_weeks; rf.language.value = s.language;
   targets();
   planPreview();
@@ -801,16 +899,33 @@ function targets() {
   $("mailList").innerHTML = list(S.targets.email, s.email || [], "email",
     t("Keine SMTP-Empfänger gefunden. Richte unter Einstellungen → Geräte & Dienste die SMTP-Integration ein und lege dort einen Empfänger an."));
 }
+// Vorschau der nächsten Läufe aus den Formularwerten
 function planPreview() {
-  const f = $("planForm");
-  if (!f.enabled.checked) { $("planPreview").textContent = t("Der Zeitplan ist ausgeschaltet. Berichte entstehen nur über „Bericht erstellen“."); return; }
-  const [h, m] = (f.time.value || "06:30").split(":").map(Number), now = new Date(), wdN = +f.weekday.value;
-  const n = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m); n.setDate(n.getDate() + ((wdN - (n.getDay() + 6) % 7) + 7) % 7);
-  if (n <= now) n.setDate(n.getDate() + 7);
-  const mo = new Date(n); mo.setDate(n.getDate() - ((n.getDay() + 6) % 7) - 7); const so = new Date(mo); so.setDate(mo.getDate() + 6);
-  $("planPreview").textContent = t("Nächster Lauf: {d} · Bericht für KW {kw} ({r})", { d: `${wd(n)} ${dm(n)} ${hm(n)}`, kw: isoWeek(mo), r: `${dm(mo)}–${dmy(so)}` });
+  const f = $("planForm"), now = new Date(), out = [];
+  const at = (d, time) => { const [h, m] = (time || "06:30").split(":").map(Number); d.setHours(h, m, 0, 0); return d; };
+  const fmtRun = d => `${wd(d)} ${dmy(d)} ${hm(d)}`;
+  if (f.enabled.checked) {
+    const n = at(new Date(now.getFullYear(), now.getMonth(), now.getDate()), f.time.value);
+    n.setDate(n.getDate() + ((+f.weekday.value - (n.getDay() + 6) % 7) + 7) % 7); if (n <= now) n.setDate(n.getDate() + 7);
+    const mo = new Date(n); mo.setDate(n.getDate() - ((n.getDay() + 6) % 7) - 7); const so = new Date(mo); so.setDate(mo.getDate() + 6);
+    out.push(t("Wochenbericht: {d} · KW {kw} ({r})", { d: fmtRun(n), kw: isoWeek(mo), r: `${dm(mo)}–${dmy(so)}` }));
+  }
+  if (f.m_enabled.checked) {
+    let n = at(new Date(now.getFullYear(), now.getMonth(), +f.m_day.value), f.m_time.value);
+    if (n <= now) n = at(new Date(now.getFullYear(), now.getMonth() + 1, +f.m_day.value), f.m_time.value);
+    const pm = new Date(n.getFullYear(), n.getMonth() - 1, 1);
+    out.push(t("Monatsbericht: {d} · {m}", { d: fmtRun(n), m: `${MON()[pm.getMonth()]} ${pm.getFullYear()}` }));
+  }
+  if (f.y_enabled.checked) {
+    let n = at(new Date(now.getFullYear(), +f.y_month.value - 1, +f.y_day.value), f.y_time.value);
+    if (n <= now) n = at(new Date(now.getFullYear() + 1, +f.y_month.value - 1, +f.y_day.value), f.y_time.value);
+    out.push(t("Jahresbericht: {d} · {j}", { d: fmtRun(n), j: n.getFullYear() - 1 }));
+  }
+  $("planPreview").innerHTML = out.length ? `<b>${t("Nächste Läufe")}</b>` + out.map(x => `<span>${esc(x)}</span>`).join("")
+    : `<span>${t("Alle Zeitpläne sind ausgeschaltet. Berichte entstehen nur über „Bericht erstellen“.")}</span>`;
 }
 $("planForm").addEventListener("input", planPreview);
+$("planForm").addEventListener("change", planPreview);
 function renderSettings() {
   $("infoKv").innerHTML = `
     <dt>${t("Version")}</dt><dd>${esc(S.version)}</dd>
@@ -828,7 +943,9 @@ async function save(form, body, errEl) {
   } catch (e) { if (errEl) { errEl.textContent = e.message; errEl.hidden = false; } else toast(e.message, true); }
 }
 $("planForm").onsubmit = e => { e.preventDefault(); const f = e.target;
-  save(f, { enabled: f.enabled.checked, weekday: +f.weekday.value, time: f.time.value }); };
+  save(f, { enabled: f.enabled.checked, weekday: +f.weekday.value, time: f.time.value,
+    m_enabled: f.m_enabled.checked, m_day: +f.m_day.value, m_time: f.m_time.value, m_prev_year: f.m_prev_year.checked,
+    y_enabled: f.y_enabled.checked, y_day: +f.y_day.value, y_month: +f.y_month.value, y_time: f.y_time.value }); };
 $("repForm").onsubmit = e => { e.preventDefault(); const f = e.target;
   save(f, { plant_name: f.plant_name.value, kwp: f.kwp.value === "" ? null : +f.kwp.value, keep_weeks: +f.keep_weeks.value, language: f.language.value }, $("repErr")); };
 const picked = n => [...document.querySelectorAll(`#sendForm input[name=${n}]:checked`)].map(x => x.value);

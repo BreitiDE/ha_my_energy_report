@@ -1,8 +1,9 @@
-"""Auswertung der Energie-Statistik und Erzeugung des PDF-Berichts (Deutsch/Englisch)."""
+"""Auswertung der Energie-Statistik und PDF-Bericht für Woche, Monat und Jahr (Deutsch/Englisch)."""
 
+import calendar
 import math
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 KATEGORIEN = ["pv", "bezug", "einspeisung", "laden", "entladen", "wasser"]
 
@@ -10,9 +11,15 @@ TAGE = {"de": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
         "en": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]}
 MONATE = {"de": ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"],
           "en": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]}
+MONATE_LANG = {"de": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September",
+                      "Oktober", "November", "Dezember"],
+               "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September",
+                      "October", "November", "December"]}
 
 EN = {
     "Energie-Wochenbericht": "Weekly Energy Report",
+    "Energie-Monatsbericht": "Monthly Energy Report",
+    "Energie-Jahresbericht": "Annual Energy Report",
     "PV-Erzeugung": "Solar production",
     "Hausverbrauch": "Home consumption",
     "Autarkie": "Self-sufficiency",
@@ -20,16 +27,18 @@ EN = {
     "Netzbezug": "Grid import",
     "Einspeisung": "Grid export",
     "Batterie": "Battery",
+    "Batterie entladen": "Battery discharged",
     "Wasser": "Water",
     "Netz": "Grid",
     "Solar direkt": "Solar direct",
     "Woher kam der Strom?": "Where did the power come from?",
     "Hausverbrauch je Tag": "Home consumption per day",
+    "Hausverbrauch je Monat": "Home consumption per month",
     "Erzeugung und Verbrauch im Tagesverlauf": "Production and consumption by hour",
     "Ø kWh je Stunde": "avg. kWh per hour",
     "Ø Liter je Stunde": "avg. litres per hour",
     "Verbrauch": "Consumption",
-    "Energieflüsse der Woche": "Energy flows this week",
+    "Energieflüsse": "Energy flows",
     "Herkunft des Verbrauchs": "Source of consumption",
     "Verwendung des PV-Stroms": "Use of solar power",
     "Direkt verbraucht": "Used directly",
@@ -37,11 +46,18 @@ EN = {
     "Eingespeist": "Exported",
     "Erzeugung": "Production",
     "Vorwoche": "Previous week",
+    "Vormonat": "Previous month",
+    "Vorjahr": "Previous year",
+    "Vorjahresmonat": "Same month last year",
     "Diese Woche": "This week",
+    "Dieser Monat": "This month",
+    "Dieses Jahr": "This year",
     "Bester Tag": "Best day",
+    "Bester Monat": "Best month",
     "Spez. Ertrag": "Specific yield",
     "Spitzenstunde": "Peak hour",
     "Tagesertrag": "Daily yield",
+    "Monatsertrag": "Monthly yield",
     "Durchschnittliches Tagesprofil": "Average daily profile",
     "Jahresverlauf {jahr}": "Year {jahr}",
     "PV bisher {v} kWh": "solar so far {v} kWh",
@@ -57,7 +73,9 @@ EN = {
     "Liter": "Litres",
     "Details": "Details",
     "Tageswerte": "Daily values",
+    "Monatswerte": "Monthly values",
     "Tag": "Day",
+    "Monat": "Month",
     "Summe": "Total",
     "Einspeis.": "Export",
     "Bat. +": "Bat. +",
@@ -65,20 +83,24 @@ EN = {
     "Wasser L": "Water L",
     "Energiewerte in kWh. Bat. + = in die Batterie geladen, Bat. - = aus der Batterie entnommen.":
         "Energy values in kWh. Bat. + = charged into the battery, Bat. - = taken from the battery.",
+    "Vergleich": "Comparison",
+    "Kennzahl": "Figure",
+    "Änderung": "Change",
+    "keine Daten": "no data",
     "PV-Erzeugung nach Quelle": "Solar production by source",
     "Ertragsstärkste PV-Stunden": "Strongest solar hours",
+    "Ertragsstärkste PV-Tage": "Strongest solar days",
     "Kurzfazit": "Summary",
-    "Netz · Batterie · Wasser": "Grid · Battery · Water",
     "Ø {v} kWh pro Tag": "avg. {v} kWh per day",
     "Ø {v} kWh/Tag · {p}": "avg. {v} kWh/day · {p}",
     "Ø {v} L/Tag · {p}": "avg. {v} L/day · {p}",
     "{v} kWh aus dem Netz": "{v} kWh from the grid",
     "des PV-Stroms selbst genutzt": "of solar power used on site",
     "entladen · {v} kWh geladen": "discharged · {v} kWh charged",
-    "Vorwoche: {v} kWh": "Previous week: {v} kWh",
+    "{name}: {v} kWh": "{name}: {v} kWh",
     " ggü. VW": " vs. prev. week",
-    " ggü. Vorwoche": " vs. previous week",
-    " zur Vorwoche": " vs. previous week",
+    " ggü. VM": " vs. prev. month",
+    " ggü. VJ": " vs. prev. year",
     "keine Vergleichsdaten": "no comparison data",
     "{tag} {von}-{bis} Uhr": "{tag} {von}-{bis}",
     "{tag}, {datum}  {von}:00 - {bis}:00 Uhr": "{tag}, {datum}  {von}:00 - {bis}:00",
@@ -86,10 +108,18 @@ EN = {
     "Erstellt {t} · Quelle: Home Assistant Energie-Statistik": "Created {t} · Source: Home Assistant energy statistics",
     "Seite {n}/{{nb}}": "Page {n}/{{nb}}",
     "KW {kw}": "Week {kw}",
-    "Die PV-Anlage hat in KW {kw} {v} kWh erzeugt": "The solar system produced {v} kWh in week {kw}",
-    " ({p} gegenüber der Vorwoche).": " ({p} compared to the previous week).",
-    "Stärkster Tag war {a} ({av} kWh), schwächster {b} ({bv} kWh).":
-        "The best day was {a} ({av} kWh), the weakest {b} ({bv} kWh).",
+    "Jahr {j}": "Year {j}",
+    "in KW {kw}": "in week {kw}",
+    "im {m}": "in {m}",
+    "im Jahr {j}": "in {j}",
+    "Die PV-Anlage hat {wann} {v} kWh erzeugt": "The solar system produced {v} kWh {wann}",
+    " ({p} gegenüber {vor}).": " ({p} compared to {vor}).",
+    "der Vorwoche": "the previous week",
+    "dem Vormonat": "the previous month",
+    "dem Vorjahr": "the previous year",
+    "Stärkster {e} war {a} ({av} kWh), schwächster {b} ({bv} kWh).":
+        "The best {e} was {a} ({av} kWh), the weakest {b} ({bv} kWh).",
+    "Tag": "Day",
     "Im Haus wurden {v} kWh verbraucht, davon kamen {n} kWh aus dem Netz":
         "The home used {v} kWh, of which {n} kWh came from the grid",
     ", die Autarkie lag bei {a} %.": ", self-sufficiency was {a} %.",
@@ -98,7 +128,11 @@ EN = {
     "Die Batterie hat {a} kWh aufgenommen und {b} kWh abgegeben.":
         "The battery took in {a} kWh and delivered {b} kWh.",
     "Der Wasserverbrauch lag bei {v} Litern": "Water consumption was {v} litres",
+    "Im Vergleich zum Vorjahresmonat lag die PV-Erzeugung bei {p}.":
+        "Compared to the same month last year, solar production was {p}.",
     "Kubikmeter": "cubic metres",
+    "Fortsetzung": "continued",
+    "%-Pkt.": "pp",
 }
 
 
@@ -122,6 +156,9 @@ class Sprache:
     def monat(self, i):
         return MONATE[self.lang][i]
 
+    def monat_lang(self, i):
+        return MONATE_LANG[self.lang][i]
+
     def datum(self, d, jahr=False):
         if self.lang == "en":
             return d.strftime("%d/%m/%Y" if jahr else "%d/%m")
@@ -134,7 +171,7 @@ class Sprache:
 
 
 # ----------------------------------------------------------------------
-# Quellen und Zeitraum
+# Quellen und Zeiträume
 # ----------------------------------------------------------------------
 def quellen_aus_prefs(prefs):
     q = {k: [] for k in KATEGORIEN}
@@ -162,15 +199,48 @@ def quellen_aus_prefs(prefs):
     return q
 
 
-def zeitraum(montag, tz):
-    """montag: date des ersten Tags der Berichtswoche."""
-    mk = lambda d: datetime(d.year, d.month, d.day, tzinfo=tz)
-    return {
-        "start": mk(montag), "ende": mk(montag + timedelta(days=7)),
-        "vorwoche_start": mk(montag - timedelta(days=7)),
-        "jahr_start": datetime(montag.year, 1, 1, tzinfo=tz),
-        "jahr": montag.year, "kw": montag.isocalendar()[1],
-    }
+def _monat_plus(d, n):
+    m = d.month - 1 + n
+    return date(d.year + m // 12, m % 12 + 1, 1)
+
+
+def periode(typ, ref, vorjahr=False):
+    """Zeitraum eines Berichts. ref: ein Datum innerhalb des Zeitraums."""
+    if typ == "week":
+        start = ref - timedelta(days=ref.weekday())
+        ende = start + timedelta(days=7)
+        vor = (start - timedelta(days=7), start)
+        kw = start.isocalendar()
+        rid = f"{kw[0]}-W{kw[1]:02d}"
+        extra = {"kw": kw[1], "jahr": kw[0]}
+    elif typ == "month":
+        start = date(ref.year, ref.month, 1)
+        ende = _monat_plus(start, 1)
+        vor = (_monat_plus(start, -1), start)
+        rid = f"{start.year}-M{start.month:02d}"
+        extra = {"jahr": start.year, "monat": start.month}
+    elif typ == "year":
+        start = date(ref.year, 1, 1)
+        ende = date(ref.year + 1, 1, 1)
+        vor = (date(ref.year - 1, 1, 1), start)
+        rid = f"{start.year}-Y"
+        extra = {"jahr": start.year}
+    else:
+        raise ValueError(typ)
+    p = {"typ": typ, "id": rid, "start": start, "ende": ende, "vor": vor, "vj": None,
+         "jahr_start": date(start.year, 1, 1), **extra}
+    if typ == "month" and vorjahr:
+        p["vj"] = (date(start.year - 1, start.month, 1), _monat_plus(date(start.year - 1, start.month, 1), 1))
+    return p
+
+
+def letzte_periode(typ, heute):
+    """Der letzte abgeschlossene Zeitraum vor 'heute'."""
+    if typ == "week":
+        return heute - timedelta(days=heute.weekday() + 7)
+    if typ == "month":
+        return _monat_plus(date(heute.year, heute.month, 1), -1)
+    return date(heute.year - 1, 1, 1)
 
 
 def _lokal(wert, tz):
@@ -188,100 +258,111 @@ def _lokal(wert, tz):
 # ----------------------------------------------------------------------
 # Auswertung
 # ----------------------------------------------------------------------
-def _bilanz(k, schluessel):
-    tage = {n: [0.0] * 7 for n in ("verbrauch", "direkt", "batterie", "netz", "pv_batt")}
-    profil = [0.0] * 24
-    for i in range(7):
-        for h in range(24):
-            g = lambda kat: k[kat][schluessel].get((i, h), 0.0)
-            pv, bz, es, la, en = g("pv"), g("bezug"), g("einspeisung"), g("laden"), g("entladen")
-            verbrauch = max(pv + bz + en - es - la, 0.0)
-            pv_batt = min(la, max(pv - es, 0.0))
-            direkt = min(max(pv - es - pv_batt, 0.0), verbrauch)
-            batt = min(en, verbrauch - direkt)
-            netz = max(verbrauch - direkt - batt, 0.0)
-            tage["verbrauch"][i] += verbrauch
-            tage["direkt"][i] += direkt
-            tage["batterie"][i] += batt
-            tage["netz"][i] += netz
-            tage["pv_batt"][i] += pv_batt
-            profil[h] += verbrauch / 7
-    return tage, profil
-
-
-def auswerten(stat, jahr_stat, quellen, zr, tz, namen):
-    start_d = zr["start"].date()
-    vw_d = zr["vorwoche_start"].date()
-    k = {}
+def _analyse(stat, quellen, von, bis, tz, n, bucket):
+    """Stundenwerte eines Zeitraums auswerten. bucket(t) -> Index 0..n-1."""
+    stunden = {k: {} for k in KATEGORIEN}
+    pro_id = {}
     for kat in KATEGORIEN:
-        a = {"tage": [0.0] * 7, "tage_vw": [0.0] * 7, "std": {}, "std_vw": {},
-             "monate": [0.0] * 12, "pro_id": {}}
         for sid in quellen.get(kat, []):
-            a["pro_id"][sid] = 0.0
+            pro_id[sid] = 0.0
             for row in stat.get(sid, []) or []:
                 ch = row.get("change")
                 if ch is None:
                     continue
-                ch = max(float(ch), 0.0)
                 t = _lokal(row["start"], tz)
-                if t >= zr["start"]:
-                    i = (t.date() - start_d).days
-                    if 0 <= i < 7:
-                        a["tage"][i] += ch
-                        a["std"][(i, t.hour)] = a["std"].get((i, t.hour), 0.0) + ch
-                        a["pro_id"][sid] += ch
-                elif t >= zr["vorwoche_start"]:
-                    i = (t.date() - vw_d).days
-                    if 0 <= i < 7:
-                        a["tage_vw"][i] += ch
-                        a["std_vw"][(i, t.hour)] = a["std_vw"].get((i, t.hour), 0.0) + ch
-            for row in jahr_stat.get(sid, []) or []:
-                ch = row.get("change")
-                if ch is None:
+                if not (von <= t.date() < bis):
                     continue
-                t = _lokal(row["start"], tz)
-                if t.year == zr["jahr"]:
-                    a["monate"][t.month - 1] += max(float(ch), 0.0)
-        a["summe"] = sum(a["tage"])
-        a["summe_vw"] = sum(a["tage_vw"])
-        a["vorhanden"] = bool(quellen.get(kat))
-        a["profil"] = [sum(a["std"].get((i, h), 0.0) for i in range(7)) / 7 for h in range(24)]
-        a["profil_vw"] = [sum(a["std_vw"].get((i, h), 0.0) for i in range(7)) / 7 for h in range(24)]
-        a["quellen"] = [(namen.get(s, s), v) for s, v in sorted(a["pro_id"].items(), key=lambda kv: -kv[1])]
-        k[kat] = a
-
-    pv = k["pv"]
-    pv["bester"] = max(range(7), key=lambda i: pv["tage"][i])
-    pv["schwaechster"] = min(range(7), key=lambda i: pv["tage"][i])
-    pv["top"] = sorted(pv["std"].items(), key=lambda kv: kv[1], reverse=True)[:5]
-
-    bil, profil_v = _bilanz(k, "std")
-    bil_vw, _ = _bilanz(k, "std_vw")
-    monate_v = [max(k["pv"]["monate"][m] + k["bezug"]["monate"][m] + k["entladen"]["monate"][m]
-                    - k["einspeisung"]["monate"][m] - k["laden"]["monate"][m], 0.0) for m in range(12)]
+                ch = max(float(ch), 0.0)
+                stunden[kat][t] = stunden[kat].get(t, 0.0) + ch
+                pro_id[sid] += ch
+    tage = max((bis - von).days, 1)
+    a = {k: {"b": [0.0] * n, "profil": [0.0] * 24, "summe": 0.0, "vorhanden": bool(quellen.get(k))}
+         for k in KATEGORIEN}
+    bil = {k: [0.0] * n for k in ("verbrauch", "direkt", "batterie", "netz", "pv_batt")}
+    profil_v = [0.0] * 24
+    pv_stunden, pv_tage = {}, {}
+    alle = set()
+    for k in KATEGORIEN:
+        alle.update(stunden[k])
+    for t in alle:
+        g = {k: stunden[k].get(t, 0.0) for k in KATEGORIEN}
+        b = bucket(t)
+        if not 0 <= b < n:
+            continue
+        for k in KATEGORIEN:
+            a[k]["b"][b] += g[k]
+            a[k]["profil"][t.hour] += g[k] / tage
+        pv, bz, es, la, en = g["pv"], g["bezug"], g["einspeisung"], g["laden"], g["entladen"]
+        verbrauch = max(pv + bz + en - es - la, 0.0)
+        pv_batt = min(la, max(pv - es, 0.0))
+        direkt = min(max(pv - es - pv_batt, 0.0), verbrauch)
+        batt = min(en, verbrauch - direkt)
+        netz = max(verbrauch - direkt - batt, 0.0)
+        for k, v in (("verbrauch", verbrauch), ("direkt", direkt), ("batterie", batt), ("netz", netz), ("pv_batt", pv_batt)):
+            bil[k][b] += v
+        profil_v[t.hour] += verbrauch / tage
+        if pv > 0:
+            pv_stunden[t] = pv
+            pv_tage[t.date()] = pv_tage.get(t.date(), 0.0) + pv
+    for k in KATEGORIEN:
+        a[k]["summe"] = sum(a[k]["b"])
     v_sum = sum(bil["verbrauch"])
-    verbrauch = {
-        "vorhanden": k["bezug"]["vorhanden"],
-        "tage": bil["verbrauch"], "tage_vw": bil_vw["verbrauch"],
-        "summe": v_sum, "summe_vw": sum(bil_vw["verbrauch"]),
-        "direkt": bil["direkt"], "batterie": bil["batterie"], "netz": bil["netz"],
-        "summe_direkt": sum(bil["direkt"]), "summe_batterie": sum(bil["batterie"]),
-        "summe_netz": sum(bil["netz"]),
-        "profil": profil_v, "monate": monate_v,
-        "autarkie": (100 * (1 - sum(bil["netz"]) / v_sum)) if v_sum > 0 else None,
-        "autarkie_tage": [(100 * (1 - bil["netz"][i] / bil["verbrauch"][i])) if bil["verbrauch"][i] > 0 else None
-                          for i in range(7)],
-        "pv_batt": sum(bil["pv_batt"]),
-    }
-    eig = None
-    if pv["summe"] > 0 and k["einspeisung"]["vorhanden"]:
-        eig = 100 * max(pv["summe"] - k["einspeisung"]["summe"], 0.0) / pv["summe"]
-
-    daten = [start_d + timedelta(days=i) for i in range(7)]
+    pv_sum = a["pv"]["summe"]
     return {
-        "kw": zr["kw"], "jahr": zr["jahr"], "monat_aktuell": zr["start"].month,
-        "von": daten[0], "bis": daten[6], "daten": daten,
-        "k": k, "verbrauch": verbrauch, "eigenverbrauch": eig,
+        "k": a, "bil": bil, "tage": tage, "daten_vorhanden": bool(alle),
+        "verbrauch": v_sum, "netz": sum(bil["netz"]), "direkt": sum(bil["direkt"]),
+        "batterie": sum(bil["batterie"]), "pv_batt": sum(bil["pv_batt"]),
+        "profil_verbrauch": profil_v,
+        "autarkie": (100 * (1 - sum(bil["netz"]) / v_sum)) if v_sum > 0 else None,
+        "autarkie_b": [(100 * (1 - bil["netz"][i] / bil["verbrauch"][i])) if bil["verbrauch"][i] > 0 else None
+                       for i in range(n)],
+        "eigen": (100 * max(pv_sum - a["einspeisung"]["summe"], 0.0) / pv_sum)
+                 if pv_sum > 0 and a["einspeisung"]["vorhanden"] else None,
+        "top_stunden": sorted(pv_stunden.items(), key=lambda kv: kv[1], reverse=True)[:5],
+        "top_tage": sorted(pv_tage.items(), key=lambda kv: kv[1], reverse=True)[:5],
+        "pro_id": pro_id,
+    }
+
+
+def _bucket(typ, start):
+    if typ == "year":
+        return 12, lambda t: t.month - 1
+    n = 7 if typ == "week" else calendar.monthrange(start.year, start.month)[1]
+    return n, lambda t: (t.date() - start).days
+
+
+def auswerten(per, stats, monat_stat, quellen, tz, namen):
+    """stats: {"cur": …, "vor": …, "vj": …} Stundenstatistik je Zeitraum."""
+    typ = per["typ"]
+    n, bf = _bucket(typ, per["start"])
+    cur = _analyse(stats["cur"], quellen, per["start"], per["ende"], tz, n, bf)
+    vs, ve = per["vor"]
+    n_v, bf_v = _bucket(typ, vs)
+    vor = _analyse(stats.get("vor") or {}, quellen, vs, ve, tz, n_v, bf_v)
+    vj = None
+    if per.get("vj"):
+        js, je = per["vj"]
+        n_j, bf_j = _bucket(typ, js)
+        vj = _analyse(stats.get("vj") or {}, quellen, js, je, tz, n_j, bf_j)
+    monate = None
+    if monat_stat is not None:
+        monate = {k: [0.0] * 12 for k in KATEGORIEN}
+        for kat in KATEGORIEN:
+            for sid in quellen.get(kat, []):
+                for row in monat_stat.get(sid, []) or []:
+                    if row.get("change") is None:
+                        continue
+                    t = _lokal(row["start"], tz)
+                    if t.year == per["start"].year:
+                        monate[kat][t.month - 1] += max(float(row["change"]), 0.0)
+        monate["verbrauch"] = [max(monate["pv"][m] + monate["bezug"][m] + monate["entladen"][m]
+                                   - monate["einspeisung"][m] - monate["laden"][m], 0.0) for m in range(12)]
+    pv = cur["k"]["pv"]["b"]
+    return {
+        "per": per, "typ": typ, "n": n, "cur": cur, "vor": vor, "vj": vj, "monate": monate,
+        "bester": max(range(n), key=lambda i: pv[i]), "schwaechster": min(range(n), key=lambda i: pv[i]),
+        "quellen": [(namen.get(s, s), cur["pro_id"].get(s, 0.0)) for s in quellen.get("pv", [])],
+        "verbrauch_da": bool(quellen.get("bezug")),
     }
 
 
@@ -292,18 +373,20 @@ def pct(neu, alt):
 
 
 def kennzahlen(d):
-    """Kompakte Werte fuer die Berichtsliste."""
-    k, v = d["k"], d["verbrauch"]
+    """Kompakte Werte für die Berichtsliste."""
+    c, v = d["cur"], d["vor"]
+    k = c["k"]
     r = lambda x, n=1: round(x, n)
+    da = lambda kat: k[kat]["vorhanden"]
     return {
-        "pv": r(k["pv"]["summe"]) if k["pv"]["vorhanden"] else None,
-        "pv_vw": r(k["pv"]["summe_vw"]) if k["pv"]["vorhanden"] else None,
-        "verbrauch": r(v["summe"]) if v["vorhanden"] else None,
-        "autarkie": r(v["autarkie"], 0) if v["autarkie"] is not None else None,
-        "bezug": r(k["bezug"]["summe"]) if k["bezug"]["vorhanden"] else None,
-        "einspeisung": r(k["einspeisung"]["summe"]) if k["einspeisung"]["vorhanden"] else None,
-        "batterie": r(k["entladen"]["summe"]) if k["entladen"]["vorhanden"] else None,
-        "wasser": r(k["wasser"]["summe"], 0) if k["wasser"]["vorhanden"] else None,
+        "pv": r(k["pv"]["summe"]) if da("pv") else None,
+        "pv_vw": r(v["k"]["pv"]["summe"]) if da("pv") and v["daten_vorhanden"] else None,
+        "verbrauch": r(c["verbrauch"]) if d["verbrauch_da"] else None,
+        "autarkie": r(c["autarkie"], 0) if c["autarkie"] is not None else None,
+        "bezug": r(k["bezug"]["summe"]) if da("bezug") else None,
+        "einspeisung": r(k["einspeisung"]["summe"]) if da("einspeisung") else None,
+        "batterie": r(k["entladen"]["summe"]) if da("entladen") else None,
+        "wasser": r(k["wasser"]["summe"], 0) if da("wasser") else None,
     }
 
 
@@ -327,16 +410,27 @@ def _nice_max(v):
     return 10 * e
 
 
+def titel_zeitraum(per, S):
+    """Kurzbezeichnung des Zeitraums, z. B. 'KW 44 · 26.10. - 01.11.2026', 'Oktober 2026', 'Jahr 2025'."""
+    if per["typ"] == "week":
+        bis = per["ende"] - timedelta(days=1)
+        return f"{S.t('KW {kw}', kw=per['kw'])} · {S.datum(per['start'])} - {S.datum(bis, True)}"
+    if per["typ"] == "month":
+        return f"{S.monat_lang(per['start'].month - 1)} {per['start'].year}"
+    return S.t("Jahr {j}", j=per["start"].year)
+
+
 def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
     from fpdf import FPDF
 
     S = Sprache(lang)
     t, n = S.t, S.n
+    typ, per, cur, vor, vj = d["typ"], d["per"], d["cur"], d["vor"], d["vj"]
+    k, kv = cur["k"], vor["k"]
+    N = d["n"]
 
-    # Farben: Akzent laut Styleguide, Serien angelehnt an das Energie-Dashboard
     SOLAR = (206, 108, 0)
     SOLAR_DUNKEL = (164, 85, 2)
-    SOLAR_HELL = (237, 183, 146)
     SOLAR_ZART = (247, 219, 201)
     NETZ = (42, 120, 214)
     EINSP = (98, 80, 214)
@@ -353,10 +447,32 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
     WEISS = (255, 255, 255)
     KOPF = (26, 26, 25)
 
-    k = d["k"]
-    v = d["verbrauch"]
-    pv = k["pv"]
     hat = {kat: k[kat]["vorhanden"] for kat in k}
+    vor_name = {"week": "Vorwoche", "month": "Vormonat", "year": "Vorjahr"}[typ]
+    vor_kurz = {"week": " ggü. VW", "month": " ggü. VM", "year": " ggü. VJ"}[typ]
+    jetzt_name = {"week": "Diese Woche", "month": "Dieser Monat", "year": "Dieses Jahr"}[typ]
+    berichtstitel = {"week": "Energie-Wochenbericht", "month": "Energie-Monatsbericht", "year": "Energie-Jahresbericht"}[typ]
+    zeitraum_txt = titel_zeitraum(per, S)
+    vor_da = vor["daten_vorhanden"]
+
+    def label(i):
+        if typ == "week":
+            dd = per["start"] + timedelta(days=i)
+            return f"{S.tag(i)} {S.datum(dd)}"
+        if typ == "month":
+            return str(i + 1)
+        return S.monat(i)
+
+    def label_lang(i):
+        if typ == "week":
+            return label(i)
+        if typ == "month":
+            dd = per["start"] + timedelta(days=i)
+            return f"{S.tag(dd.weekday())} {S.datum(dd)}"
+        return S.monat_lang(i)
+
+    labels = [label(i) for i in range(N)]
+    viele = N > 12
 
     class Bericht(FPDF):
         def footer(self):
@@ -371,8 +487,6 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
     pdf.set_auto_page_break(False)
     pdf.set_margins(15, 15, 15)
     pdf.alias_nb_pages()
-    zeitraum_txt = f"{t('KW {kw}', kw=d['kw'])} · {S.datum(d['von'])} - {S.datum(d['bis'], True)}"
-    tageslabels = [f"{S.tag(i)} {S.datum(d['daten'][i])}" for i in range(7)]
 
     def logo(x, y, s):
         pdf.set_fill_color(*SOLAR)
@@ -396,7 +510,7 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
             pdf.text(15, 17, _latin(titel))
             pdf.set_font("Helvetica", "", 10.5)
             pdf.set_text_color(*GRAU_HELL)
-            pdf.text(15, 25.5, _latin(f"{zeitraum_txt}  ·  {anlagenname}"))
+            pdf.text(15, 25.5, _latin(f"{zeitraum_txt}  ·  {anlagenname}" if anlagenname else zeitraum_txt))
             return 44
         pdf.set_font("Helvetica", "B", 14)
         pdf.text(15, 12.5, _latin(titel))
@@ -406,11 +520,18 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
         return 32
 
     erste = [True]
+    akt_titel = [""]
 
     def neue_seite(titel):
         pdf.add_page()
+        akt_titel[0] = titel
         y = kopf(titel, erste[0])
         erste[0] = False
+        return y
+
+    def platz(y, hoehe):
+        if y + hoehe > 278:
+            return neue_seite(f"{akt_titel[0]} ({t('Fortsetzung')})") + 4
         return y
 
     def abschnitt(y, titel, zusatz=None):
@@ -426,7 +547,7 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
         pdf.set_line_width(0.3)
         pdf.line(15, y + 2, 195, y + 2)
 
-    def kachel(x, y, w, h, label, wert, sub, akzent, sub_farbe=GRAU):
+    def kachel(x, y, w, h, lab, wert, sub, akzent, sub_farbe=GRAU):
         pdf.set_fill_color(252, 252, 251)
         pdf.set_draw_color(225, 224, 217)
         pdf.set_line_width(0.25)
@@ -435,7 +556,7 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
         pdf.rect(x, y + 3, 1.2, h - 6, style="F")
         pdf.set_font("Helvetica", "", 7.5)
         pdf.set_text_color(82, 81, 78)
-        pdf.text(x + 4.5, y + 6.5, _latin(label))
+        pdf.text(x + 4.5, y + 6.5, _latin(lab))
         pdf.set_font("Helvetica", "B", 14.5)
         pdf.set_text_color(*DUNKEL)
         pdf.text(x + 4.5, y + 15.3, _latin(wert))
@@ -488,20 +609,22 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
             pdf.text(x + 6.5, y, _latin(text))
             x += 9 + pdf.get_string_width(_latin(text))
 
-    def balken(x0, y0, w, h, labels, serien, gestapelt=False, einheit="kWh", dez=1,
-               beschriften=None, hervorheben=None, schritte=4, label_fett=None):
-        anz = len(labels)
+    def balken(x0, y0, w, h, serien, gestapelt=False, einheit="kWh", dez=1,
+               beschriften=None, hervorheben=None, schritte=4, label_fett=None, labs=None):
+        labs = labs or labels
+        anz = len(labs)
         if gestapelt:
             werte_max = max(sum(s[2][i] for s in serien) for i in range(anz))
         else:
-            werte_max = max(max(s[2]) for s in serien)
+            werte_max = max(max(s[2][:anz] + [0]) for s in serien)
         vmax = _nice_max(werte_max * 1.14)
         y_achse(x0, y0, w, h, vmax, schritte, einheit)
         gw = w / anz
+        werte_zeigen = anz <= 12
         for i in range(anz):
             gx = x0 + i * gw
             if gestapelt:
-                bw = gw * 0.55
+                bw = gw * (0.55 if anz <= 12 else 0.7)
                 bx = gx + (gw - bw) / 2
                 yy = y0 + h
                 for _, farbe, werte in serien:
@@ -510,32 +633,34 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
                         pdf.set_fill_color(*farbe)
                         pdf.rect(bx, yy - hh, bw, hh, style="F")
                         yy -= hh
-                total = sum(s[2][i] for s in serien)
-                pdf.set_font("Helvetica", "B", 6.8)
-                pdf.set_text_color(*DUNKEL)
-                lab = n(total, dez)
-                pdf.text(bx + bw / 2 - pdf.get_string_width(lab) / 2, yy - 1.4, lab)
+                if werte_zeigen:
+                    total = sum(s[2][i] for s in serien)
+                    pdf.set_font("Helvetica", "B", 6.8)
+                    pdf.set_text_color(*DUNKEL)
+                    lab = n(total, dez)
+                    pdf.text(bx + bw / 2 - pdf.get_string_width(lab) / 2, yy - 1.4, lab)
             else:
                 m = len(serien)
-                innen = gw * (0.78 if m > 1 else 0.55)
+                innen = gw * (0.78 if m > 1 else (0.55 if anz <= 12 else 0.7))
                 bw = innen / m
                 for j, (_, farbe, werte) in enumerate(serien):
+                    wert = werte[i] if i < len(werte) else 0.0
                     bx = gx + (gw - innen) / 2 + j * bw
-                    hh = h * werte[i] / vmax
+                    hh = h * wert / vmax
                     f = farbe
                     if hervorheben and hervorheben[0] == j and hervorheben[1] == i:
                         f = hervorheben[2]
                     pdf.set_fill_color(*f)
                     pdf.rect(bx + bw * 0.06, y0 + h - hh, bw * 0.88, hh, style="F")
-                    if (beschriften is None or j in beschriften) and round(werte[i], dez) > 0:
+                    if werte_zeigen and (beschriften is None or j in beschriften) and round(wert, dez) > 0:
                         pdf.set_font("Helvetica", "B" if m == 1 or j == m - 1 else "", 6.5)
                         pdf.set_text_color(*(DUNKEL if m == 1 or j == m - 1 else GRAU))
-                        lab = n(werte[i], dez)
+                        lab = n(wert, dez)
                         pdf.text(bx + bw / 2 - pdf.get_string_width(lab) / 2, y0 + h - hh - 1.3, lab)
             fett = label_fett is not None and label_fett == i
-            pdf.set_font("Helvetica", "B" if fett else "", 7.2)
+            pdf.set_font("Helvetica", "B" if fett else "", 7.2 if anz <= 12 else 6.2)
             pdf.set_text_color(*(DUNKEL if fett else GRAU))
-            lab = _latin(labels[i])
+            lab = _latin(labs[i])
             pdf.text(gx + gw / 2 - pdf.get_string_width(lab) / 2, y0 + h + 4.8, lab)
 
     def profil(x0, y0, w, h, flaechen, linien, einheit="kWh"):
@@ -593,44 +718,46 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
             pdf.text(x + 4.5, y + 12.7, lab)
             x += 10 + pdf.get_string_width(lab)
 
-    # ====================== Uebersicht ======================
-    if v["vorhanden"]:
-        y = neue_seite(t("Energie-Wochenbericht"))
+    def vgl(neu, alt_a):
+        return S.pct(pct(neu, alt_a) if vor_da else None, vor_kurz)
+
+    # ====================== Übersicht ======================
+    v_da = d["verbrauch_da"]
+    if v_da:
+        y = neue_seite(t(berichtstitel))
         kacheln = []
         if hat["pv"]:
-            kacheln.append((t("PV-Erzeugung"), f"{n(pv['summe'])} kWh",
-                            S.pct(pct(pv["summe"], pv["summe_vw"]), " ggü. VW"), SOLAR))
-        kacheln.append((t("Hausverbrauch"), f"{n(v['summe'])} kWh",
-                        t("Ø {v} kWh/Tag · {p}", v=n(v["summe"] / 7), p=S.pct(pct(v["summe"], v["summe_vw"]))), GRAU))
-        if v["autarkie"] is not None:
-            kacheln.append((t("Autarkie"), f"{n(v['autarkie'], 0)} %",
-                            t("{v} kWh aus dem Netz", v=n(v["summe_netz"])), GRUEN))
-        if d["eigenverbrauch"] is not None:
-            kacheln.append((t("Eigenverbrauch"), f"{n(d['eigenverbrauch'], 0)} %",
-                            t("des PV-Stroms selbst genutzt"), SOLAR_DUNKEL))
-        kacheln.append((t("Netzbezug"), f"{n(k['bezug']['summe'])} kWh",
-                        S.pct(pct(k["bezug"]["summe"], k["bezug"]["summe_vw"]), " ggü. VW"), NETZ))
+            kacheln.append((t("PV-Erzeugung"), f"{n(k['pv']['summe'])} kWh", vgl(k["pv"]["summe"], kv["pv"]["summe"]), SOLAR))
+        kacheln.append((t("Hausverbrauch"), f"{n(cur['verbrauch'])} kWh",
+                        t("Ø {v} kWh/Tag · {p}", v=n(cur["verbrauch"] / cur["tage"]),
+                          p=S.pct(pct(cur["verbrauch"], vor["verbrauch"]) if vor_da else None)), GRAU))
+        if cur["autarkie"] is not None:
+            kacheln.append((t("Autarkie"), f"{n(cur['autarkie'], 0)} %", t("{v} kWh aus dem Netz", v=n(cur["netz"])), GRUEN))
+        if cur["eigen"] is not None:
+            kacheln.append((t("Eigenverbrauch"), f"{n(cur['eigen'], 0)} %", t("des PV-Stroms selbst genutzt"), SOLAR_DUNKEL))
+        kacheln.append((t("Netzbezug"), f"{n(k['bezug']['summe'])} kWh", vgl(k["bezug"]["summe"], kv["bezug"]["summe"]), NETZ))
         if hat["einspeisung"]:
             kacheln.append((t("Einspeisung"), f"{n(k['einspeisung']['summe'])} kWh",
-                            S.pct(pct(k["einspeisung"]["summe"], k["einspeisung"]["summe_vw"]), " ggü. VW"), EINSP))
+                            vgl(k["einspeisung"]["summe"], kv["einspeisung"]["summe"]), EINSP))
         if hat["laden"] or hat["entladen"]:
             kacheln.append((t("Batterie"), f"{n(k['entladen']['summe'])} kWh",
                             t("entladen · {v} kWh geladen", v=n(k["laden"]["summe"])), BATT))
         if hat["wasser"]:
             w_ = k["wasser"]
             kacheln.append((t("Wasser"), f"{n(w_['summe'], 0)} L",
-                            t("Ø {v} L/Tag · {p}", v=n(w_["summe"] / 7, 0), p=S.pct(pct(w_["summe"], w_["summe_vw"]))), WASSER))
+                            t("Ø {v} L/Tag · {p}", v=n(w_["summe"] / cur["tage"], 0),
+                              p=S.pct(pct(w_["summe"], kv["wasser"]["summe"]) if vor_da else None)), WASSER))
         y = kachelreihen(y, kacheln[:8]) + 12
 
-        abschnitt(y, t("Woher kam der Strom?"), t("Hausverbrauch je Tag"))
+        abschnitt(y, t("Woher kam der Strom?"), t("Hausverbrauch je Monat" if typ == "year" else "Hausverbrauch je Tag"))
         serien = []
         if hat["pv"]:
-            serien.append((t("Solar direkt"), SOLAR, v["direkt"]))
+            serien.append((t("Solar direkt"), SOLAR, cur["bil"]["direkt"]))
         if hat["entladen"]:
-            serien.append((t("Batterie"), BATT, v["batterie"]))
-        serien.append((t("Netz"), NETZ, v["netz"]))
+            serien.append((t("Batterie"), BATT, cur["bil"]["batterie"]))
+        serien.append((t("Netz"), NETZ, cur["bil"]["netz"]))
         legende(y, [(f, nm, False) for nm, f, _ in serien])
-        balken(27, y + 10, 168, 44, tageslabels, serien, gestapelt=True)
+        balken(27, y + 10, 168, 44, serien, gestapelt=True, dez=0 if typ == "year" else 1)
         y += 70
 
         abschnitt(y, t("Erzeugung und Verbrauch im Tagesverlauf"), t("Ø kWh je Stunde"))
@@ -638,68 +765,86 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
         if hat["pv"]:
             leg.insert(0, (SOLAR, t("PV-Erzeugung"), False))
         legende(y, leg)
-        profil(27, y + 10, 168, 32,
-               [(SOLAR_ZART, SOLAR, pv["profil"])] if hat["pv"] else [],
-               [(DUNKEL, v["profil"], False)])
+        profil(27, y + 10, 168, 32, [(SOLAR_ZART, SOLAR, k["pv"]["profil"])] if hat["pv"] else [],
+               [(DUNKEL, cur["profil_verbrauch"], False)])
         y += 56
 
         if y < 245:
-            abschnitt(y, t("Energieflüsse der Woche"))
+            abschnitt(y, t("Energieflüsse"))
             y += 9
-            herkunft = [(t("Solar direkt"), SOLAR, v["summe_direkt"])]
+            herkunft = [(t("Solar direkt"), SOLAR, cur["direkt"])]
             if hat["entladen"]:
-                herkunft.append((t("Batterie"), BATT, v["summe_batterie"]))
-            herkunft.append((t("Netz"), NETZ, v["summe_netz"]))
+                herkunft.append((t("Batterie"), BATT, cur["batterie"]))
+            herkunft.append((t("Netz"), NETZ, cur["netz"]))
             flussbalken(y, t("Herkunft des Verbrauchs"), herkunft)
-            if hat["pv"] and pv["summe"] > 0:
+            if hat["pv"] and k["pv"]["summe"] > 0:
                 y += 19
-                verw = [(t("Direkt verbraucht"), SOLAR, v["summe_direkt"])]
+                verw = [(t("Direkt verbraucht"), SOLAR, cur["direkt"])]
                 if hat["laden"]:
-                    verw.append((t("In die Batterie"), BATT_HELL, v["pv_batt"]))
+                    verw.append((t("In die Batterie"), BATT_HELL, cur["pv_batt"]))
                 if hat["einspeisung"]:
                     verw.append((t("Eingespeist"), EINSP, k["einspeisung"]["summe"]))
                 flussbalken(y, t("Verwendung des PV-Stroms"), verw)
 
     # ====================== PV ======================
+    pv = k["pv"]
     if hat["pv"]:
         y = neue_seite(t("PV-Erzeugung"))
-        b = pv["bester"]
-        p = pct(pv["summe"], pv["summe_vw"])
+        b = d["bester"]
+        p = pct(pv["summe"], kv["pv"]["summe"]) if vor_da else None
         kacheln = [
-            (t("Erzeugung"), f"{n(pv['summe'])} kWh", t("Ø {v} kWh pro Tag", v=n(pv["summe"] / 7)), SOLAR),
-            (t("Vorwoche"), S.pct(p) if p is not None else "-", t("Vorwoche: {v} kWh", v=n(pv["summe_vw"])), SOLAR,
+            (t("Erzeugung"), f"{n(pv['summe'])} kWh", t("Ø {v} kWh pro Tag", v=n(pv["summe"] / cur["tage"])), SOLAR),
+            (t(vor_name), S.pct(p) if p is not None else "-", f"{t(vor_name)}: {n(kv['pv']['summe'])} kWh", SOLAR,
              GRAU if p is None else (GRUEN if p >= 0 else ROT)),
-            (t("Bester Tag"), f"{n(pv['tage'][b])} kWh", f"{S.tag(b)}, {S.datum(d['daten'][b])}", SOLAR),
+            (t("Bester Monat" if typ == "year" else "Bester Tag"), f"{n(pv['b'][b])} kWh", label_lang(b), SOLAR),
         ]
-        if kwp:
-            kacheln.append((t("Spez. Ertrag"), n(pv["summe"] / kwp, 2), f"kWh/kWp · {n(kwp, 1)} kWp", SOLAR))
-        elif pv["top"]:
-            (ti, th), tv = pv["top"][0]
+        if vj is not None:
+            pj = pct(pv["summe"], vj["k"]["pv"]["summe"]) if vj["daten_vorhanden"] else None
+            kacheln.append((t("Vorjahresmonat"), S.pct(pj) if pj is not None else "-",
+                            f"{t('Vorjahresmonat')}: {n(vj['k']['pv']['summe'])} kWh" if vj["daten_vorhanden"] else t("keine Daten"),
+                            SOLAR, GRAU if pj is None else (GRUEN if pj >= 0 else ROT)))
+        elif kwp:
+            kacheln.append((t("Spez. Ertrag"), n(pv["summe"] / kwp, 2 if typ == "week" else 1), f"kWh/kWp · {n(kwp, 1)} kWp", SOLAR))
+        elif cur["top_stunden"]:
+            ts, tv = cur["top_stunden"][0]
             kacheln.append((t("Spitzenstunde"), f"{n(tv, 2)} kWh",
-                            t("{tag} {von}-{bis} Uhr", tag=S.tag(ti), von=f"{th:02d}", bis=f"{th + 1:02d}"), SOLAR))
+                            t("{tag} {von}-{bis} Uhr", tag=f"{S.tag(ts.weekday())} {S.datum(ts.date())}",
+                              von=f"{ts.hour:02d}", bis=f"{ts.hour + 1:02d}"), SOLAR))
         y = kachelreihen(y, kacheln) + 13
 
-        abschnitt(y, t("Tagesertrag"))
-        legende(y, [(GRAU_HELL, t("Vorwoche"), False), (SOLAR, t("Diese Woche"), False)])
-        balken(27, y + 10, 168, 44, tageslabels,
-               [(t("Vorwoche"), GRAU_HELL, pv["tage_vw"]), (t("Diese Woche"), SOLAR, pv["tage"])],
-               beschriften={1}, hervorheben=(1, b, SOLAR_DUNKEL))
+        abschnitt(y, t("Monatsertrag" if typ == "year" else "Tagesertrag"))
+        if typ == "month" and vj is not None:
+            serien = [(t("Vorjahresmonat"), GRAU_HELL, vj["k"]["pv"]["b"]), (t(jetzt_name), SOLAR, pv["b"])]
+        elif typ == "month":
+            serien = [(t(jetzt_name), SOLAR, pv["b"])]
+        else:
+            serien = [(t(vor_name), GRAU_HELL, kv["pv"]["b"]), (t(jetzt_name), SOLAR, pv["b"])]
+        legende(y, [(f, nm, False) for nm, f, _ in serien])
+        balken(27, y + 10, 168, 44, serien, beschriften={len(serien) - 1},
+               hervorheben=(len(serien) - 1, b, SOLAR_DUNKEL), dez=0 if typ == "year" else 1)
         y += 70
 
         abschnitt(y, t("Durchschnittliches Tagesprofil"), t("Ø kWh je Stunde"))
-        legende(y, [(SOLAR, t("Diese Woche"), False), (GRAU, t("Vorwoche"), True)])
-        profil(27, y + 10, 168, 32, [(SOLAR_ZART, SOLAR, pv["profil"])], [(GRAU, pv["profil_vw"], True)])
+        legende(y, [(SOLAR, t(jetzt_name), False), (GRAU, t(vor_name), True)])
+        profil(27, y + 10, 168, 32, [(SOLAR_ZART, SOLAR, pv["profil"])],
+               [(GRAU, kv["pv"]["profil"], True)] if vor_da else [])
         y += 56
 
-        zusatz = t("PV bisher {v} kWh", v=n(sum(pv["monate"]), 0))
-        serien = [(t("PV-Erzeugung"), SOLAR, pv["monate"])]
-        if v["vorhanden"]:
-            zusatz += t(" · Verbrauch {v} kWh", v=n(sum(v["monate"]), 0))
-            serien.append((t("Verbrauch"), GRAU_HELL, v["monate"]))
-        abschnitt(y, t("Jahresverlauf {jahr}", jahr=d["jahr"]), zusatz)
-        legende(y, [(f, nm, False) for nm, f, _ in serien])
-        balken(27, y + 10, 168, 36, [S.monat(m) for m in range(12)], serien, dez=0, schritte=2,
-               beschriften={0}, label_fett=d["monat_aktuell"] - 1)
+        if d["monate"] is not None:
+            mo = d["monate"]
+            zusatz = t("PV bisher {v} kWh", v=n(sum(mo["pv"]), 0))
+            serien = [(t("PV-Erzeugung"), SOLAR, mo["pv"])]
+            if v_da:
+                zusatz += t(" · Verbrauch {v} kWh", v=n(sum(mo["verbrauch"]), 0))
+                serien.append((t("Verbrauch"), GRAU_HELL, mo["verbrauch"]))
+            abschnitt(y, t("Jahresverlauf {jahr}", jahr=per["start"].year), zusatz)
+            legende(y, [(f, nm, False) for nm, f, _ in serien])
+            balken(27, y + 10, 168, 36, serien, dez=0, schritte=2, beschriften={0},
+                   label_fett=per["start"].month - 1, labs=[S.monat(m) for m in range(12)])
+        elif typ == "year" and v_da:
+            abschnitt(y, t("Autarkie"), t("Monatswerte"))
+            werte = [a or 0.0 for a in cur["autarkie_b"]]
+            balken(27, y + 10, 168, 36, [(t("Autarkie"), SOLAR_DUNKEL, werte)], einheit="%", dez=0, schritte=2)
 
     # ====================== Netz / Batterie / Wasser ======================
     bereiche = []
@@ -709,6 +854,7 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
         bereiche.append("batterie")
     if hat["wasser"]:
         bereiche.append("wasser")
+    dez_b = 0 if typ == "year" else 1
     if bereiche:
         namen_b = {"netz": t("Netz"), "batterie": t("Batterie"), "wasser": t("Wasser")}
         y = neue_seite(" · ".join(namen_b[x] for x in bereiche)) + 4
@@ -716,118 +862,169 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
             if bereich == "netz":
                 serien, zus = [], []
                 if hat["bezug"]:
-                    serien.append((t("Netzbezug"), NETZ, k["bezug"]["tage"]))
+                    serien.append((t("Netzbezug"), NETZ, k["bezug"]["b"]))
                     zus.append(t("Bezug {v} kWh", v=n(k["bezug"]["summe"])))
                 if hat["einspeisung"]:
-                    serien.append((t("Einspeisung"), EINSP, k["einspeisung"]["tage"]))
+                    serien.append((t("Einspeisung"), EINSP, k["einspeisung"]["b"]))
                     zus.append(t("Einspeisung {v} kWh", v=n(k["einspeisung"]["summe"])))
                 if hat["bezug"] and hat["einspeisung"]:
                     saldo = k["einspeisung"]["summe"] - k["bezug"]["summe"]
                     zus.append(t("Saldo {v} kWh", v=f"{'+' if saldo >= 0 else ''}{n(saldo)}"))
                 abschnitt(y, t("Netz"), " · ".join(zus))
                 legende(y + 7, [(f, nm, False) for nm, f, _ in serien])
-                balken(27, y + 15, 168, 40, tageslabels, serien)
+                balken(27, y + 15, 168, 40, serien, dez=dez_b)
             elif bereich == "batterie":
                 serien = []
                 if hat["laden"]:
-                    serien.append((t("Geladen"), BATT_HELL, k["laden"]["tage"]))
+                    serien.append((t("Geladen"), BATT_HELL, k["laden"]["b"]))
                 if hat["entladen"]:
-                    serien.append((t("Entladen"), BATT, k["entladen"]["tage"]))
+                    serien.append((t("Entladen"), BATT, k["entladen"]["b"]))
                 zus = t("geladen {a} kWh · entladen {b} kWh", a=n(k["laden"]["summe"]), b=n(k["entladen"]["summe"]))
                 if k["laden"]["summe"] > 0 and hat["entladen"]:
-                    zus += t(" · Verhältnis entladen/geladen {v} %",
-                             v=n(k["entladen"]["summe"] / k["laden"]["summe"] * 100, 0))
+                    zus += t(" · Verhältnis entladen/geladen {v} %", v=n(k["entladen"]["summe"] / k["laden"]["summe"] * 100, 0))
                 abschnitt(y, t("Batterie"), zus)
                 legende(y + 7, [(f, nm, False) for nm, f, _ in serien])
-                balken(27, y + 15, 168, 40, tageslabels, serien)
+                balken(27, y + 15, 168, 40, serien, dez=dez_b)
             else:
                 w_ = k["wasser"]
                 abschnitt(y, t("Wasser"), f"{n(w_['summe'], 0)} L · {n(w_['summe'] / 1000, 2)} {t('Kubikmeter')} · "
-                                          f"{S.pct(pct(w_['summe'], w_['summe_vw']), ' ggü. Vorwoche')}")
-                legende(y + 7, [(GRAU_HELL, t("Vorwoche"), False), (WASSER, t("Diese Woche"), False)])
-                balken(27, y + 15, 168, 40, tageslabels,
-                       [(t("Vorwoche"), GRAU_HELL, w_["tage_vw"]), (t("Diese Woche"), WASSER, w_["tage"])],
-                       einheit=t("Liter"), dez=0, beschriften={1})
+                                          f"{S.pct(pct(w_['summe'], kv['wasser']['summe']) if vor_da else None, vor_kurz)}")
+                if typ == "month":
+                    serien = [(t(jetzt_name), WASSER, w_["b"])]
+                else:
+                    serien = [(t(vor_name), GRAU_HELL, kv["wasser"]["b"]), (t(jetzt_name), WASSER, w_["b"])]
+                legende(y + 7, [(f, nm, False) for nm, f, _ in serien])
+                balken(27, y + 15, 168, 40, serien, einheit=t("Liter"), dez=0, beschriften={len(serien) - 1})
             y += 76
         if hat["wasser"] and y < 230:
             w_ = k["wasser"]
             abschnitt(y, t("Wasser im Tagesverlauf"), t("Ø Liter je Stunde"))
-            legende(y, [(WASSER, t("Diese Woche"), False), (GRAU, t("Vorwoche"), True)])
-            profil(27, y + 10, 168, 28, [(WASSER_HELL, WASSER, w_["profil"])], [(GRAU, w_["profil_vw"], True)],
-                   einheit=t("Liter"))
+            legende(y, [(WASSER, t(jetzt_name), False), (GRAU, t(vor_name), True)])
+            profil(27, y + 10, 168, 28, [(WASSER_HELL, WASSER, w_["profil"])],
+                   [(GRAU, kv["wasser"]["profil"], True)] if vor_da else [], einheit=t("Liter"))
 
     # ====================== Details ======================
     y = neue_seite(t("Details")) + 4
-    abschnitt(y, t("Tageswerte"))
-    spalten = [("Tag", None)]
+    abschnitt(y, t("Monatswerte" if typ == "year" else "Tageswerte"))
+    spalten = [("Tag" if typ != "year" else "Monat", None)]
     if hat["pv"]:
-        spalten.append(("PV", lambda i: n(pv["tage"][i])))
-    if v["vorhanden"]:
-        spalten.append(("Verbrauch", lambda i: n(v["tage"][i])))
+        spalten.append(("PV", lambda i: n(pv["b"][i])))
+    if v_da:
+        spalten.append(("Verbrauch", lambda i: n(cur["bil"]["verbrauch"][i])))
     if hat["bezug"]:
-        spalten.append(("Netzbezug", lambda i: n(k["bezug"]["tage"][i])))
+        spalten.append(("Netzbezug", lambda i: n(k["bezug"]["b"][i])))
     if hat["einspeisung"]:
-        spalten.append(("Einspeis.", lambda i: n(k["einspeisung"]["tage"][i])))
+        spalten.append(("Einspeis.", lambda i: n(k["einspeisung"]["b"][i])))
     if hat["laden"]:
-        spalten.append(("Bat. +", lambda i: n(k["laden"]["tage"][i])))
+        spalten.append(("Bat. +", lambda i: n(k["laden"]["b"][i])))
     if hat["entladen"]:
-        spalten.append(("Bat. -", lambda i: n(k["entladen"]["tage"][i])))
-    if v["vorhanden"]:
-        spalten.append(("Autarkie", lambda i: "-" if v["autarkie_tage"][i] is None
-                        else f"{n(v['autarkie_tage'][i], 0)} %"))
+        spalten.append(("Bat. -", lambda i: n(k["entladen"]["b"][i])))
+    if v_da:
+        spalten.append(("Autarkie", lambda i: "-" if cur["autarkie_b"][i] is None else f"{n(cur['autarkie_b'][i], 0)} %"))
     if hat["wasser"]:
-        spalten.append(("Wasser L", lambda i: n(k["wasser"]["tage"][i], 0)))
-    erste_breite = 26
+        spalten.append(("Wasser L", lambda i: n(k["wasser"]["b"][i], 0)))
+    erste_breite = 30
     rest = (180 - erste_breite) / max(len(spalten) - 1, 1)
     breiten = [erste_breite] + [rest] * (len(spalten) - 1)
+    zh = 6.5 if N <= 12 else 6.0
 
-    y += 6
-    pdf.set_fill_color(*KOPF)
-    pdf.rect(15, y, 180, 7, style="F")
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.set_text_color(*WEISS)
-    x = 15
-    for (name, _), sw in zip(spalten, breiten):
-        pdf.set_xy(x + 1.5, y)
-        pdf.cell(sw - 3, 7, _latin(t(name)), align="L" if name == "Tag" else "R")
-        x += sw
-    y += 7
+    def tabellenkopf(y, kopfzeilen, br):
+        pdf.set_fill_color(*KOPF)
+        pdf.rect(15, y, 180, 7, style="F")
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(*WEISS)
+        x = 15
+        for i, (name, sw) in enumerate(zip(kopfzeilen, br)):
+            pdf.set_xy(x + 1.5, y)
+            pdf.cell(sw - 3, 7, _latin(name), align="L" if i == 0 else "R")
+            x += sw
+        return y + 7
 
-    def zeile(texte, fett=False, hintergrund=None):
-        nonlocal y
+    def zeile(y, texte, br, fett=False, hintergrund=None, farben=None, h=6.5):
         if hintergrund:
             pdf.set_fill_color(*hintergrund)
-            pdf.rect(15, y, 180, 6.5, style="F")
+            pdf.rect(15, y, 180, h, style="F")
         x = 15
-        for (name, _), sw, text in zip(spalten, breiten, texte):
-            pdf.set_font("Helvetica", "B" if fett else "", 8.5)
-            pdf.set_text_color(*DUNKEL)
+        for i, (sw, text) in enumerate(zip(br, texte)):
+            pdf.set_font("Helvetica", "B" if fett else "", 8.5 if h >= 6.5 else 8)
+            pdf.set_text_color(*((farben or {}).get(i, DUNKEL)))
             pdf.set_xy(x + 1.5, y)
-            pdf.cell(sw - 3, 6.5, _latin(text), align="L" if name == "Tag" else "R")
+            pdf.cell(sw - 3, h, _latin(text), align="L" if i == 0 else "R")
             x += sw
-        y += 6.5
+        return y + h
 
-    for i in range(7):
-        zeile([tageslabels[i]] + [s[1](i) for s in spalten[1:]], hintergrund=GRAU_ZART if i % 2 else None)
-    summen = {"PV": n(pv["summe"]), "Verbrauch": n(v["summe"]),
+    y = tabellenkopf(y + 6, [t(s[0]) for s in spalten], breiten)
+    for i in range(N):
+        y = zeile(y, [label_lang(i)] + [s[1](i) for s in spalten[1:]], breiten,
+                  hintergrund=GRAU_ZART if i % 2 else None, h=zh)
+    summen = {"PV": n(pv["summe"]), "Verbrauch": n(cur["verbrauch"]),
               "Netzbezug": n(k["bezug"]["summe"]), "Einspeis.": n(k["einspeisung"]["summe"]),
               "Bat. +": n(k["laden"]["summe"]), "Bat. -": n(k["entladen"]["summe"]),
-              "Autarkie": "-" if v["autarkie"] is None else f"{n(v['autarkie'], 0)} %",
+              "Autarkie": "-" if cur["autarkie"] is None else f"{n(cur['autarkie'], 0)} %",
               "Wasser L": n(k["wasser"]["summe"], 0)}
     pdf.set_draw_color(*SOLAR)
     pdf.set_line_width(0.5)
     pdf.line(15, y, 195, y)
-    zeile([t("Summe")] + [summen[s[0]] for s in spalten[1:]], fett=True, hintergrund=SOLAR_ZART)
+    y = zeile(y, [t("Summe")] + [summen[s[0]] for s in spalten[1:]], breiten, fett=True, hintergrund=SOLAR_ZART)
     pdf.set_font("Helvetica", "", 7)
     pdf.set_text_color(*GRAU)
     pdf.text(15, y + 4, _latin(t("Energiewerte in kWh. Bat. + = in die Batterie geladen, Bat. - = aus der Batterie entnommen.")))
     y += 14
 
-    if hat["pv"] and pv["quellen"]:
+    # --- Vergleich ---
+    vgl_spalten = [(t(vor_name), vor)]
+    if vj is not None:
+        vgl_spalten.append((t("Vorjahresmonat"), vj))
+    zeilen = []
+
+    def zeilenwert(name, f, dez=1, einheit="kWh", prozent=False):
+        werte = [f(cur)] + [f(x) if x["daten_vorhanden"] else None for _, x in vgl_spalten]
+        zeilen.append((name, werte, dez, einheit, prozent))
+
+    if hat["pv"]:
+        zeilenwert(t("PV-Erzeugung"), lambda x: x["k"]["pv"]["summe"])
+    if v_da:
+        zeilenwert(t("Hausverbrauch"), lambda x: x["verbrauch"])
+        zeilenwert(t("Netzbezug"), lambda x: x["k"]["bezug"]["summe"])
+    if hat["einspeisung"]:
+        zeilenwert(t("Einspeisung"), lambda x: x["k"]["einspeisung"]["summe"])
+    if hat["entladen"]:
+        zeilenwert(t("Batterie entladen"), lambda x: x["k"]["entladen"]["summe"])
+    if v_da:
+        zeilenwert(t("Autarkie"), lambda x: x["autarkie"], dez=0, einheit="%", prozent=True)
+    if hat["wasser"]:
+        zeilenwert(t("Wasser"), lambda x: x["k"]["wasser"]["summe"], dez=0, einheit="L")
+
+    hoehe = 14 + 7 + 6.5 * len(zeilen)
+    y = platz(y, hoehe)
+    abschnitt(y, t("Vergleich"))
+    kz = [t("Kennzahl"), titel_zeitraum(per, S) if typ != "week" else t("KW {kw}", kw=per["kw"])]
+    for name, _ in vgl_spalten:
+        kz += [name, t("Änderung")]
+    br = [46] + [(180 - 46) / (len(kz) - 1)] * (len(kz) - 1)
+    y = tabellenkopf(y + 6, kz, br)
+    for i, (name, werte, dez, einheit, prozent) in enumerate(zeilen):
+        fmt = lambda v: "-" if v is None else f"{n(v, dez)} {einheit}"
+        texte, farben = [name, fmt(werte[0])], {}
+        for j in range(1, len(werte)):
+            texte.append(fmt(werte[j]) if werte[j] is not None else t("keine Daten"))
+            if werte[j] is None or werte[0] is None:
+                texte.append("-")
+            elif prozent:
+                dv = werte[0] - werte[j]
+                texte.append(f"{'+' if dv >= 0 else ''}{n(dv, 0)} {t('%-Pkt.')}")
+            else:
+                pc = pct(werte[0], werte[j])
+                texte.append("-" if pc is None else f"{'+' if pc >= 0 else ''}{n(pc, 0)} %")
+        y = zeile(y, texte, br, hintergrund=GRAU_ZART if i % 2 else None, farben=farben)
+    y += 10
+
+    if hat["pv"] and d["quellen"]:
+        y = platz(y, 14 + 7.5 * len(d["quellen"]))
         abschnitt(y, t("PV-Erzeugung nach Quelle"))
         y += 7
         gesamt = pv["summe"] or 1
-        for name, wert in pv["quellen"]:
+        for name, wert in d["quellen"]:
             pdf.set_font("Helvetica", "", 9)
             pdf.set_text_color(*DUNKEL)
             nm = _latin(name)
@@ -848,51 +1045,65 @@ def baue_pdf(d, pfad, anlagenname, kwp, erstellt, lang="de"):
             y += 7.5
         y += 7
 
-        abschnitt(y, t("Ertragsstärkste PV-Stunden"))
-        y += 7
-        for rang, ((ti, th), wert) in enumerate(pv["top"], 1):
-            pdf.set_fill_color(*(SOLAR if rang == 1 else SOLAR_ZART))
-            pdf.ellipse(15, y, 5.5, 5.5, style="F")
-            pdf.set_font("Helvetica", "B", 8)
-            pdf.set_text_color(*DUNKEL)
-            pdf.text(15 + 2.75 - pdf.get_string_width(str(rang)) / 2, y + 3.9, str(rang))
-            pdf.set_font("Helvetica", "", 9)
-            pdf.text(24, y + 4, _latin(t("{tag}, {datum}  {von}:00 - {bis}:00 Uhr", tag=S.tag(ti),
-                                         datum=S.datum(d["daten"][ti]), von=f"{th:02d}", bis=f"{th + 1:02d}")))
-            pdf.set_font("Helvetica", "B", 9)
-            lab = f"{n(wert, 2)} kWh"
-            pdf.text(120 - pdf.get_string_width(lab), y + 4, lab)
-            y += 7.5
-        y += 7
+        top = cur["top_stunden"] if typ == "week" else cur["top_tage"]
+        if top:
+            y = platz(y, 14 + 7.5 * len(top))
+            abschnitt(y, t("Ertragsstärkste PV-Stunden" if typ == "week" else "Ertragsstärkste PV-Tage"))
+            y += 7
+            for rang, (wann, wert) in enumerate(top, 1):
+                pdf.set_fill_color(*(SOLAR if rang == 1 else SOLAR_ZART))
+                pdf.ellipse(15, y, 5.5, 5.5, style="F")
+                pdf.set_font("Helvetica", "B", 8)
+                pdf.set_text_color(*DUNKEL)
+                pdf.text(15 + 2.75 - pdf.get_string_width(str(rang)) / 2, y + 3.9, str(rang))
+                pdf.set_font("Helvetica", "", 9)
+                if typ == "week":
+                    txt = t("{tag}, {datum}  {von}:00 - {bis}:00 Uhr", tag=S.tag(wann.weekday()),
+                            datum=S.datum(wann.date()), von=f"{wann.hour:02d}", bis=f"{wann.hour + 1:02d}")
+                else:
+                    txt = f"{S.tag(wann.weekday())}, {S.datum(wann, True)}"
+                pdf.text(24, y + 4, _latin(txt))
+                pdf.set_font("Helvetica", "B", 9)
+                lab = f"{n(wert, 2 if typ == 'week' else 1)} kWh"
+                pdf.text(120 - pdf.get_string_width(lab), y + 4, lab)
+                y += 7.5
+            y += 7
 
-    abschnitt(y, t("Kurzfazit"))
-    y += 5
+    # --- Kurzfazit ---
     saetze = []
+    wann = {"week": t("in KW {kw}", kw=per.get("kw")), "month": t("im {m}", m=titel_zeitraum(per, S)),
+            "year": t("im Jahr {j}", j=per["start"].year)}[typ]
+    vor_dat = {"week": "der Vorwoche", "month": "dem Vormonat", "year": "dem Vorjahr"}[typ]
     if hat["pv"]:
-        b, s = pv["bester"], pv["schwaechster"]
-        p = pct(pv["summe"], pv["summe_vw"])
-        saetze.append(t("Die PV-Anlage hat in KW {kw} {v} kWh erzeugt", kw=d["kw"], v=n(pv["summe"]))
-                      + (t(" ({p} gegenüber der Vorwoche).", p=S.pct(p)) if p is not None else "."))
-        saetze.append(t("Stärkster Tag war {a} ({av} kWh), schwächster {b} ({bv} kWh).",
-                        a=S.tag(b), av=n(pv["tage"][b]), b=S.tag(s), bv=n(pv["tage"][s])))
-    if v["vorhanden"]:
+        b, s = d["bester"], d["schwaechster"]
+        p = pct(pv["summe"], kv["pv"]["summe"]) if vor_da else None
+        saetze.append(t("Die PV-Anlage hat {wann} {v} kWh erzeugt", wann=wann, v=n(pv["summe"]))
+                      + (t(" ({p} gegenüber {vor}).", p=S.pct(p), vor=t(vor_dat)) if p is not None else "."))
+        saetze.append(t("Stärkster {e} war {a} ({av} kWh), schwächster {b} ({bv} kWh).",
+                        e=t("Monat" if typ == "year" else "Tag"), a=label_lang(b), av=n(pv["b"][b]),
+                        b=label_lang(s), bv=n(pv["b"][s])))
+        if vj is not None and vj["daten_vorhanden"]:
+            saetze.append(t("Im Vergleich zum Vorjahresmonat lag die PV-Erzeugung bei {p}.",
+                            p=S.pct(pct(pv["summe"], vj["k"]["pv"]["summe"]))))
+    if v_da:
         saetze.append(t("Im Haus wurden {v} kWh verbraucht, davon kamen {n} kWh aus dem Netz",
-                        v=n(v["summe"]), n=n(v["summe_netz"]))
-                      + (t(", die Autarkie lag bei {a} %.", a=n(v["autarkie"], 0)) if v["autarkie"] is not None else "."))
-    if d["eigenverbrauch"] is not None:
+                        v=n(cur["verbrauch"]), n=n(cur["netz"]))
+                      + (t(", die Autarkie lag bei {a} %.", a=n(cur["autarkie"], 0)) if cur["autarkie"] is not None else "."))
+    if cur["eigen"] is not None:
         saetze.append(t("{e} % des PV-Stroms wurden selbst genutzt, {x} kWh gingen ins Netz.",
-                        e=n(d["eigenverbrauch"], 0), x=n(k["einspeisung"]["summe"])))
+                        e=n(cur["eigen"], 0), x=n(k["einspeisung"]["summe"])))
     if hat["laden"] or hat["entladen"]:
         saetze.append(t("Die Batterie hat {a} kWh aufgenommen und {b} kWh abgegeben.",
                         a=n(k["laden"]["summe"]), b=n(k["entladen"]["summe"])))
     if hat["wasser"]:
-        w_ = k["wasser"]
-        p = pct(w_["summe"], w_["summe_vw"])
-        saetze.append(t("Der Wasserverbrauch lag bei {v} Litern", v=n(w_["summe"], 0))
-                      + (t(" ({p} gegenüber der Vorwoche).", p=S.pct(p)) if p is not None else "."))
+        p = pct(k["wasser"]["summe"], kv["wasser"]["summe"]) if vor_da else None
+        saetze.append(t("Der Wasserverbrauch lag bei {v} Litern", v=n(k["wasser"]["summe"], 0))
+                      + (t(" ({p} gegenüber {vor}).", p=S.pct(p), vor=t(vor_dat)) if p is not None else "."))
+    y = platz(y, 40)
+    abschnitt(y, t("Kurzfazit"))
     pdf.set_font("Helvetica", "", 9.5)
     pdf.set_text_color(*DUNKEL)
-    pdf.set_xy(15, y)
+    pdf.set_xy(15, y + 5)
     pdf.multi_cell(180, 5.2, _latin(" ".join(saetze)), align="L")
 
     os.makedirs(os.path.dirname(pfad), exist_ok=True)

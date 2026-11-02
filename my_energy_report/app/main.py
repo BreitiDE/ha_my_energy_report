@@ -13,7 +13,7 @@ from aiohttp import web
 import report
 from ha import HA, HAError
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 DATA = Path(os.environ.get("MER_DATA", "/data"))
 MEDIA = Path(os.environ.get("MER_MEDIA", "/media/my_energy_report"))
 MEDIA_ID = "media-source://media_source/local/my_energy_report"
@@ -431,7 +431,9 @@ async def starten(app: App):
     runner = web.AppRunner(web_app)
     await runner.setup()
     await web.TCPSite(runner, "0.0.0.0", PORT).start()
-    log.info("My Energy Report %s läuft auf Port %s", VERSION, PORT)
+    import ha as ha_modul
+    log.info("My Energy Report %s läuft auf Port %s (Token %s)", VERSION, PORT,
+             "vorhanden" if ha_modul.TOKEN else "FEHLT")
 
     async def abgleich_schleife():
         while True:

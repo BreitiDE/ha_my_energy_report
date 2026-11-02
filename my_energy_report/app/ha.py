@@ -4,7 +4,25 @@ import os
 
 import aiohttp
 
-TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
+
+
+def _token():
+    """SUPERVISOR_TOKEN aus der Umgebung oder – beim Start über s6-overlay – aus dessen Umgebungsablage."""
+    t = os.environ.get("SUPERVISOR_TOKEN") or os.environ.get("HASSIO_TOKEN")
+    if t:
+        return t.strip()
+    for name in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+        try:
+            with open(f"/run/s6/container_environment/{name}", encoding="utf-8") as f:
+                t = f.read().strip()
+            if t:
+                return t
+        except OSError:
+            pass
+    return ""
+
+
+TOKEN = _token()
 CORE = "http://supervisor/core"
 SUPERVISOR = "http://supervisor"
 
@@ -36,7 +54,10 @@ class HA:
                 await w.send_json({"type": "auth", "access_token": TOKEN})
                 msg = await w.receive_json()
                 if msg.get("type") != "auth_ok":
-                    raise HAError("Anmeldung an Home Assistant fehlgeschlagen")
+                    grund = msg.get("message") or msg.get("type")
+                    if not TOKEN:
+                        grund = "kein SUPERVISOR_TOKEN vorhanden"
+                    raise HAError(f"Anmeldung an Home Assistant fehlgeschlagen ({grund})")
                 ergebnisse = []
                 for i, b in enumerate(befehle, 1):
                     await w.send_json({"id": i, **b})

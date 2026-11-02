@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Energy Report</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+/* =====================================================================
+   BASIS-CSS  –  Styleguide v1.0 (siehe STYLEGUIDE.md)
+   Akzent #ce6c00 · hell + dunkel · keine externen Abhängigkeiten
+   Diesen Block unverändert in neue Apps übernehmen; App-eigenes CSS
+   kommt in einen eigenen Block darunter und nutzt nur die Tokens.
+   ===================================================================== */
+:root {
+  color-scheme: light;
+  --page:#f9f9f7; --surface:#fcfcfb; --field:#ffffff;
+  --ink:#0b0b0b; --ink-2:#52514e; --muted:#6b6a65;
+  --grid:#e1e0d9; --axis:#c3c2b7; --track:#f0efec;
+  --border:rgba(11,11,11,.10); --field-border:rgba(11,11,11,.20); --hover:rgba(11,11,11,.04);
+  --accent:#ce6c00; --accent-text:#a45502; --on-accent:#0b0b0b; --accent-soft:rgba(206,108,0,.12);
+  --good:#0ca30c;     --good-bg:rgba(12,163,12,.12);  --good-text:#086b08;
+  --warning:#fab219;  --warn-bg:rgba(250,178,25,.18); --warn-text:#7a5200;
+  --critical:#d03b3b; --crit-bg:rgba(208,59,59,.12);  --crit-text:#a62a2a;
+  --s1:#ce6c00; --s2:#2a78d6; --s3:#1baf7a; --s4:#6250d6; --s5:#e87ba4; --s6:#008300; --other:#b4b2a9;
+  --shadow:0 12px 40px rgba(0,0,0,.18);
+  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --field:#232322;
+    --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9a998f;
+    --grid:#2c2c2a; --axis:#383835; --track:#262624;
+    --border:rgba(255,255,255,.10); --field-border:rgba(255,255,255,.20); --hover:rgba(255,255,255,.05);
+    --accent-text:#e09156; --accent-soft:rgba(206,108,0,.18);
+    --good-bg:rgba(12,163,12,.18); --good-text:#6fd36f;
+    --warn-bg:rgba(250,178,25,.16); --warn-text:#f5c860;
+    --crit-bg:rgba(208,59,59,.18); --crit-text:#f08a8a;
+    --s2:#3987e5; --s3:#199e70; --s4:#9085e9; --s5:#d55181; --other:#5c5b56;
+    --shadow:0 12px 40px rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page:#0d0d0d; --surface:#1a1a19; --field:#232322;
+  --ink:#f0efec; --ink-2:#c3c2b7; --muted:#9a998f;
+  --grid:#2c2c2a; --axis:#383835; --track:#262624;
+  --border:rgba(255,255,255,.10); --field-border:rgba(255,255,255,.20); --hover:rgba(255,255,255,.05);
+  --accent-text:#e09156; --accent-soft:rgba(206,108,0,.18);
+  --good-bg:rgba(12,163,12,.18); --good-text:#6fd36f;
+  --warn-bg:rgba(250,178,25,.16); --warn-text:#f5c860;
+  --crit-bg:rgba(208,59,59,.18); --crit-text:#f08a8a;
+  --s2:#3987e5; --s3:#199e70; --s4:#9085e9; --s5:#d55181; --other:#5c5b56;
+  --shadow:0 12px 40px rgba(0,0,0,.6);
+}
+
+/* ---------- Grundlagen ---------- */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 var(--font); }
+a { color: var(--accent-text); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+h1 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
+h2 { font-size: 15px; font-weight: 600; margin: 0; }
+h3 { font-size: 14px; font-weight: 600; margin: 0; }
+.hint { color: var(--muted); font-size: 12px; }
+.sub  { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.t    { font-weight: 600; }
+.dimmed { color: var(--muted); }
+.num  { font-variant-numeric: tabular-nums; }
+svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- Seitenrahmen ---------- */
+.wrap { max-width: 1280px; margin: 0 auto; padding: 0 20px; }
+.app-header { background: var(--surface); border-bottom: 1px solid var(--border); }
+.app-header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding-top: 10px; padding-bottom: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 18px; color: var(--ink); text-decoration: none; }
+.brand svg { width: 26px; height: 26px; flex: none; }
+.app-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.app-nav a, .app-nav button { font: inherit; border: 0; background: transparent; color: var(--ink-2); padding: 8px 12px;
+  border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.app-nav a:hover, .app-nav button:hover { background: var(--hover); color: var(--ink); }
+.app-nav [aria-current="page"] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.app-nav .count { font-size: 11px; font-weight: 500; padding: 0 6px; border-radius: 999px; background: var(--track); color: var(--ink-2); }
+.who { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; color: var(--ink-2); font-size: 13px; }
+main.wrap { padding-top: 20px; padding-bottom: 48px; display: flex; flex-direction: column; gap: 16px; }
+.app-footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 16px; }
+.page-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; }
+.page-head .facts { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--ink-2); font-size: 13px; }
+.page-head .facts b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.page-head .right, .actions .right { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+/* ---------- Karten und Kennzahlen ---------- */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 12px; }
+.card-head .right { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
+.kpi { padding: 14px 16px; }
+.kpi .l { color: var(--ink-2); font-size: 12px; }
+.kpi .v { font-size: 26px; font-weight: 600; letter-spacing: -.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.kpi .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.kpi.accent .v { color: var(--accent-text); }
+.kpi.bad .v { color: var(--crit-text); }
+
+/* ---------- Schaltflächen ---------- */
+.btn { font: inherit; padding: 9px 14px; min-height: 38px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  text-decoration: none; white-space: nowrap; }
+.btn:hover { background: var(--hover); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.danger { color: var(--crit-text); }
+.btn.danger-fill { background: var(--critical); border-color: var(--critical); color: #fff; font-weight: 600; }
+.btn.small { padding: 5px 10px; min-height: 30px; font-size: 13px; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn .count { font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); }
+.icon-btn { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2);
+  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; flex: none; }
+.icon-btn:hover { background: var(--hover); color: var(--ink); }
+.icon-btn.danger { color: var(--crit-text); }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.linkbtn { font: inherit; font-size: 13px; background: none; border: 0; padding: 0; color: var(--accent-text); text-decoration: underline; cursor: pointer; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; padding: 2px; background: var(--surface); }
+.seg button { font: inherit; font-size: 13px; padding: 5px 10px; border-radius: 6px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
+.seg button:hover:not([aria-pressed="true"]) { background: var(--hover); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.row-actions { display: inline-flex; gap: 4px; }
+
+/* ---------- Status ---------- */
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); display: inline-block; flex: none; }
+.dot.ok { background: var(--good); } .dot.warn { background: var(--warning); } .dot.bad { background: var(--critical); } .dot.live { background: var(--accent); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  white-space: nowrap; background: var(--track); color: var(--ink-2); }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.ok { background: var(--good-bg); color: var(--good-text); }
+.pill.warn { background: var(--warn-bg); color: var(--warn-text); }
+.pill.bad { background: var(--crit-bg); color: var(--crit-text); }
+.pill.accent { background: var(--accent-soft); color: var(--accent-text); }
+.badge { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
+.badge.accent { border-color: transparent; background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.bar > div { height: 100%; background: var(--accent); border-radius: 3px; transition: width .5s; }
+
+/* ---------- Hinweise und Meldungen ---------- */
+.notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-radius: 12px; font-size: 13px; }
+.notice.info { background: var(--accent-soft); color: var(--ink); }
+.notice.ok   { background: var(--good-bg); color: var(--good-text); }
+.notice.warn { background: var(--warn-bg); color: var(--warn-text); font-weight: 500; }
+.notice.bad  { background: var(--crit-bg); color: var(--crit-text); font-weight: 500; }
+.notice .right { margin-left: auto; display: flex; gap: 8px; }
+.selbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 14px; border-radius: 12px; background: var(--accent-soft); }
+.selbar .right { margin-left: auto; display: flex; gap: 12px; }
+.empty { color: var(--muted); padding: 22px 0; text-align: center; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 60; max-width: calc(100vw - 32px);
+  background: var(--ink); color: var(--page); padding: 10px 16px; border-radius: 8px; font-size: 13px; box-shadow: var(--shadow); }
+.toast.err { background: var(--critical); color: #fff; }
+
+/* ---------- Tabellen ---------- */
+.table-wrap { overflow-x: auto; margin: 0 -16px; padding: 0 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-wrap > table { min-width: 600px; }   /* auf dem Handy horizontal scrollen statt quetschen */
+th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+td { padding: 9px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.nw { white-space: nowrap; }
+td.mid { vertical-align: middle; }
+tbody tr:hover { background: var(--hover); }
+tr.sel { background: var(--accent-soft); }
+tr.off td { color: var(--muted); }
+th button.sort { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer; white-space: nowrap; }
+th button.sort[aria-sort] { color: var(--ink); font-weight: 600; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 8px; vertical-align: -1px; }
+.pager { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 12px; color: var(--ink-2); font-size: 13px; }
+.pager .right { margin-left: auto; display: inline-flex; gap: 4px; align-items: center; }
+
+/* ---------- Formulare ---------- */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.stack { display: flex; flex-direction: column; gap: 14px; }
+label.f, .f { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--ink-2); min-width: 0; }
+input[type=text], input[type=url], input[type=email], input[type=password], input[type=number], input[type=search],
+input[type=date], input[type=time], input[type=datetime-local], select, textarea {
+  font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--field-border);
+  background: var(--field); color: var(--ink); min-width: 0; width: 100%; }
+textarea { resize: vertical; }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex: none; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.check + .hint { margin: -8px 0 0 24px; }
+.field-err { color: var(--crit-text); font-size: 13px; margin: 0; }
+:is(input, select, textarea):user-invalid { border-color: var(--critical); }
+code.ro { display: block; font-size: 13px; padding: 8px 10px; border-radius: 8px; border: 1px dashed var(--field-border); background: var(--hover); overflow-wrap: anywhere; }
+.search { position: relative; flex: 1 1 280px; max-width: 460px; }
+.search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.search input { padding-left: 34px; }
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; position: relative; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch .track { width: 40px; height: 22px; border-radius: 11px; background: var(--axis); position: relative; transition: background .15s; flex: none; }
+.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track::after { transform: translateX(18px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 13px; }
+dl.kv dt { color: var(--muted); } dl.kv dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ---------- Dialoge ---------- */
+dialog { border: 1px solid var(--border); border-radius: 12px; padding: 0; background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow); width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 32px); }
+dialog.wide { width: min(940px, calc(100vw - 24px)); }
+dialog.small { width: min(460px, calc(100vw - 24px)); }
+dialog::backdrop { background: rgba(11,11,11,.4); }
+.dlg { display: flex; flex-direction: column; max-height: calc(100vh - 34px); }
+.dlg-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--grid); }
+.dlg-head h2 { font-size: 16px; }
+.dlg-head .icon-btn { margin-left: auto; }
+.dlg-body { padding: 16px 20px; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+.dlg-foot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--grid); }
+.dlg-foot .grow { margin-right: auto; color: var(--ink-2); font-size: 13px; }
+
+/* ---------- Diagramme (Details: FARBDESIGN.md) ---------- */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.tip { position: absolute; pointer-events: none; z-index: 5; display: none; min-width: 160px; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--border); box-shadow: 0 4px 16px rgba(0,0,0,.12); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+
+/* ---------- Anmeldeseite ---------- */
+.login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+.login .card { width: 100%; max-width: 360px; padding: 28px 24px 24px; }
+
+/* ---------- Schmale Bildschirme ---------- */
+@media (max-width: 900px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .who, .page-head .right, .actions .right { margin-left: 0; } .wrap { padding: 0 16px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+/* ======================= Ende BASIS-CSS ======================= */
+</style>
+<style>
+/* App: My Energy Report – nur Tokens */
+.thumb { display: block; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: var(--field); cursor: zoom-in; overflow: hidden; line-height: 0; }
+.thumb img { width: 46px; height: 65px; object-fit: cover; object-position: top; display: block; }
+.thumb.ph { width: 48px; height: 67px; cursor: default; }
+td.th-cell { width: 64px; }
+.sent { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.pages { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
+.pages img { height: min(62vh, 640px); width: auto; border: 1px solid var(--border); border-radius: 4px; background: #fff; flex: none; }
+.targets { display: flex; flex-direction: column; gap: 8px; }
+.sec-title { font-size: 13px; font-weight: 600; color: var(--ink); margin: 0; }
+.sources { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.tip b { font-variant-numeric: tabular-nums; }
+.tip .row { display: flex; justify-content: space-between; gap: 14px; }
+.wk .t, .wk .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+#view-reports .table-wrap > table { min-width: 980px; }
+#view-start .table-wrap > table { min-width: 640px; }
+.donate { position: relative; display: inline-flex; }
+.donate .btn svg { color: var(--accent); }
+.donate-tip { position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: 240px; padding: 10px 12px; border-radius: 8px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--border); box-shadow: var(--shadow); font-size: 13px;
+  opacity: 0; visibility: hidden; transition: opacity .15s; pointer-events: none; }
+.donate:hover .donate-tip, .donate:focus-within .donate-tip { opacity: 1; visibility: visible; }
+.tip i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="wrap">
+    <a class="brand" href="./">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#ce6c00"/><path d="M18 5 9 18h6l-2 9 10-14h-6z" fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round"/></svg>
+      <span>My Energy Report</span>
+    </a>
+    <nav class="app-nav" aria-label="Hauptmenü">
+      <button data-view="start">Übersicht</button>
+      <button data-view="reports">Berichte <span class="count" id="navCount">0</span></button>
+      <button data-view="settings">Einstellungen</button>
+    </nav>
+    <div class="who">
+      <span id="runState" hidden><span class="dot live"></span> <span id="runText"></span></span>
+      <span><span class="dot" id="haDot"></span> <span id="haText">lädt …</span></span>
+      <span class="donate">
+        <a class="btn small" href="https://paypal.me/breitide" target="_blank" rel="noopener" aria-describedby="donateTip">
+          <svg class="i" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg><span>Unterstützen</span></a>
+        <span class="donate-tip" role="tooltip" id="donateTip">Danke für Deine Unterstützung, über eine kleine Spende würde ich mich freuen.</span>
+      </span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="notice warn" role="alert" id="haNotice" hidden>
+    <svg class="i" viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>
+    <span id="haNoticeText"></span>
+    <span class="right"><button class="btn small" id="retryBtn">Erneut verbinden</button></span>
+  </div>
+
+  <!-- ======================= Übersicht ======================= -->
+  <section id="view-start" data-v aria-label="Übersicht" class="stack" style="gap:16px">
+    <div class="page-head">
+      <h1>Übersicht</h1>
+      <div class="facts" id="startFacts"></div>
+      <div class="right"><button class="btn primary" data-create><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Bericht erstellen …</span></button></div>
+    </div>
+    <section class="kpis" aria-label="Kennzahlen" id="kpis"></section>
+    <div class="grid-2">
+      <section class="card" aria-labelledby="h-last">
+        <div class="card-head"><h2 id="h-last">Letzte Berichte</h2><span class="hint">neueste zuerst</span>
+          <div class="right"><button class="btn small" data-view-link="reports">Alle Berichte</button></div></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Vorschau</th><th>Woche</th><th>Status</th><th class="num">PV</th><th class="num">Verbrauch</th><th class="num">Aktionen</th></tr></thead>
+          <tbody id="lastBody"><tr><td colspan="6" class="empty">lädt …</td></tr></tbody>
+        </table></div>
+      </section>
+      <section class="card" aria-labelledby="h-status">
+        <div class="card-head"><h2 id="h-status">Status</h2></div>
+        <dl class="kv" id="statusKv"></dl>
+      </section>
+    </div>
+    <section class="card" aria-labelledby="h-chart">
+      <div class="card-head"><h2 id="h-chart">Verlauf</h2><span class="hint">kWh je Woche aus den Berichten</span></div>
+      <div class="legend"><span><i style="background:var(--s1)"></i>PV-Erzeugung</span><span><i style="background:var(--s2)"></i>Hausverbrauch</span></div>
+      <div class="chart" id="chart"><div class="empty">lädt …</div></div>
+    </section>
+  </section>
+
+  <!-- ======================= Berichte ======================= -->
+  <section id="view-reports" data-v aria-label="Berichte" class="stack" style="gap:16px" hidden>
+    <div class="page-head">
+      <h1>Berichte</h1>
+      <div class="facts" id="repFacts"></div>
+      <div class="right"><button class="btn primary" data-create><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Bericht erstellen …</span></button></div>
+    </div>
+    <section class="card" aria-labelledby="h-reps">
+      <div class="card-head"><h2 id="h-reps">Alle Berichte</h2><span class="hint">Klick auf die Vorschau zeigt alle Seiten</span>
+        <div class="right"><div class="seg" role="group" aria-label="Filter" id="filterSeg">
+          <button data-f="all" aria-pressed="true">Alle</button><button data-f="ok" aria-pressed="false">Erstellt</button><button data-f="error" aria-pressed="false">Fehler</button>
+        </div></div></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Vorschau</th><th><button class="sort" id="sortBtn" aria-sort="descending">Woche ↓</button></th><th>Status</th>
+          <th class="num">PV</th><th class="num">Verbrauch</th><th class="num">Autarkie</th><th class="num">Wasser</th><th class="num">Versand</th><th class="num">Aktionen</th></tr></thead>
+        <tbody id="repBody"><tr><td colspan="9" class="empty">lädt …</td></tr></tbody>
+      </table></div>
+      <div class="pager" id="pager"></div>
+    </section>
+  </section>
+
+  <!-- ======================= Einstellungen ======================= -->
+  <section id="view-settings" data-v aria-label="Einstellungen" class="stack" style="gap:16px" hidden>
+    <div class="page-head"><h1>Einstellungen</h1></div>
+    <div class="grid-2">
+      <div class="stack" style="gap:16px">
+        <section class="card" aria-labelledby="h-plan">
+          <div class="card-head"><h2 id="h-plan">Zeitplan</h2></div>
+          <form class="stack" id="planForm">
+            <label class="switch"><input type="checkbox" name="enabled"><span class="track"></span><span>Bericht automatisch erstellen</span></label>
+            <div class="form-grid">
+              <label class="f">Wochentag<select name="weekday"></select></label>
+              <label class="f">Uhrzeit<input type="time" name="time" required></label>
+            </div>
+            <p class="hint" style="margin:0">Der Bericht umfasst immer die letzte abgeschlossene Woche (Mo–So) und wird danach an die ausgewählten Empfänger verschickt.</p>
+            <div class="notice info" id="planPreview"></div>
+            <div class="actions"><button class="btn primary" type="submit">Speichern</button></div>
+          </form>
+        </section>
+        <section class="card" aria-labelledby="h-send">
+          <div class="card-head"><h2 id="h-send">Versand</h2><span class="hint">nach jedem geplanten Bericht</span></div>
+          <form class="stack" id="sendForm">
+            <div class="stack" style="gap:8px">
+              <p class="sec-title">Push an die Companion-App</p>
+              <div class="targets" id="pushList"></div>
+            </div>
+            <div class="stack" style="gap:8px">
+              <p class="sec-title">E-Mail mit PDF im Anhang</p>
+              <div class="targets" id="mailList"></div>
+            </div>
+            <p class="field-err" id="sendErr" hidden></p>
+            <div class="actions"><button class="btn primary" type="submit">Speichern</button>
+              <button class="btn" type="button" id="testPush">Push testen</button><button class="btn" type="button" id="testMail">E-Mail testen</button></div>
+          </form>
+        </section>
+      </div>
+      <div class="stack" style="gap:16px">
+        <section class="card" aria-labelledby="h-rep">
+          <div class="card-head"><h2 id="h-rep">Bericht</h2></div>
+          <form class="stack" id="repForm">
+            <label class="f">Anlagenname<input type="text" name="plant_name" maxlength="60" placeholder="z. B. Zuhause"></label>
+            <label class="f">Anlagenleistung (kWp)<input type="number" name="kwp" min="0" step="0.01" placeholder="z. B. 8,4"></label>
+            <p class="hint" style="margin:-8px 0 0">Für den spezifischen Ertrag im Bericht. Leer lassen, wenn unbekannt.</p>
+            <label class="f">Aufbewahrung (Wochen)<input type="number" name="keep_weeks" min="0" max="520" required></label>
+            <p class="hint" style="margin:-8px 0 0">Ältere Berichte werden gelöscht. 0 behält alle.</p>
+            <label class="f">Sprache<select name="language"><option value="auto">Automatisch</option><option value="de">Deutsch</option><option value="en">English</option></select></label>
+            <p class="hint" style="margin:-8px 0 0">Gilt für Oberfläche, PDF und Nachrichten.</p>
+            <p class="field-err" id="repErr" hidden></p>
+            <div class="actions"><button class="btn primary" type="submit">Speichern</button></div>
+          </form>
+        </section>
+        <section class="card" aria-labelledby="h-info">
+          <div class="card-head"><h2 id="h-info">Info</h2></div>
+          <dl class="kv" id="infoKv"></dl>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <footer class="app-footer"><span>My Energy Report <span id="ver"></span></span>
+    <a href="https://github.com/BreitiDE/ha_my_energy_report" target="_blank" rel="noopener">GitHub</a>
+    <span id="stand"></span></footer>
+</main>
+
+<!-- ======================= Dialoge ======================= -->
+<dialog id="createDlg" aria-labelledby="createTitle">
+  <form class="dlg" id="createForm">
+    <div class="dlg-head"><h2 id="createTitle">Bericht erstellen</h2>
+      <button class="icon-btn" type="button" data-close aria-label="Schließen" title="Schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dlg-body">
+      <label class="f">Woche<select name="week" id="weekSel"></select></label>
+      <label class="check"><input type="checkbox" name="send" id="sendChk"><span>Nach dem Erstellen versenden</span></label>
+      <p class="hint" id="sendHint">An die Empfänger aus den Einstellungen.</p>
+      <p class="field-err" id="createErr" hidden></p>
+    </div>
+    <div class="dlg-foot"><span class="grow" id="createInfo"></span>
+      <button class="btn" type="button" data-close>Abbrechen</button><button class="btn primary" type="submit" id="createBtn">Bericht erstellen</button></div>
+  </form>
+</dialog>
+
+<dialog id="prevDlg" class="wide" aria-labelledby="prevTitle">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="prevTitle"></h2>
+      <button class="icon-btn" type="button" data-close aria-label="Schließen" title="Schließen"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="dlg-body"><div class="pages" id="prevPages"></div></div>
+    <div class="dlg-foot"><span class="grow" id="prevInfo"></span>
+      <a class="btn" id="prevOpen" target="_blank" rel="noopener">Im Browser öffnen</a>
+      <a class="btn primary" id="prevDl"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg><span>Herunterladen</span></a></div>
+  </div>
+</dialog>
+
+<dialog id="confirmDlg" class="small" aria-labelledby="confirmTitle">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="confirmTitle"></h2></div>
+    <div class="dlg-body"><p style="margin:0" id="confirmText"></p></div>
+    <div class="dlg-foot"><button class="btn" id="confirmNo">Abbrechen</button><button class="btn primary" id="confirmYes">OK</button></div>
+  </div>
+</dialog>
+
+<script src="lang-en.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const IC = {
+  dl: '<svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+  del: '<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+  send: '<svg class="i" viewBox="0 0 24 24"><path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/></svg>',
+  redo: '<svg class="i" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>',
+  prev: '<svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+  next: '<svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
+};
+
+// ---------------- Sprache ----------------
+let LANG = "de";
+function t(s, vars) {
+  let r = (LANG === "en" && window.LANG_EN && LANG_EN[s]) || s;
+  if (vars) r = r.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? "");
+  return r;
+}
+function translateDom(root = document.body) {
+  if (LANG !== "en") return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+  nodes.forEach(n => { const s = n.nodeValue.trim(); if (s && LANG_EN[s]) n.nodeValue = n.nodeValue.replace(s, LANG_EN[s]); });
+  root.querySelectorAll("[aria-label],[title],[placeholder]").forEach(el => ["aria-label", "title", "placeholder"].forEach(a => {
+    const v = el.getAttribute(a); if (v && LANG_EN[v]) el.setAttribute(a, LANG_EN[v]); }));
+}
+const loc = () => LANG === "en" ? "en-GB" : "de-DE";
+const fmt = (v, d = 1) => v == null ? "–" : new Intl.NumberFormat(loc(), { minimumFractionDigits: d, maximumFractionDigits: d }).format(v);
+const WD = () => LANG === "en" ? ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] : ["Mo","Di","Mi","Do","Fr","Sa","So"];
+const WD_LONG = () => LANG === "en" ? ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"] : ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
+const p2 = n => String(n).padStart(2, "0");
+const wd = d => WD()[(d.getDay() + 6) % 7];
+const dm = d => LANG === "en" ? `${p2(d.getDate())}/${p2(d.getMonth() + 1)}` : `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.`;
+const dmy = d => LANG === "en" ? `${dm(d)}/${d.getFullYear()}` : `${dm(d)}${d.getFullYear()}`;
+const hm = d => `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+const dt = s => { const d = new Date(s); return `${wd(d)} ${dm(d)} ${hm(d)}`; };
+const day = s => { const [y, m, dd] = s.split("-").map(Number); return new Date(y, m - 1, dd); };
+const range = r => { const a = day(r.von), b = day(r.bis); return `${dm(a)}–${dmy(b)}`; };
+const size = b => b < 1024 ? `${b} B` : b < 1048576 ? `${fmt(b / 1024, 0)} kB` : `${fmt(b / 1048576, 1)} MB`;
+function rel(s) {
+  const diff = (new Date(s) - Date.now()) / 60000, a = Math.abs(diff);
+  const v = a < 1 ? null : a < 60 ? `${Math.round(a)} min` : a < 2880 ? `${Math.round(a / 60)} h` : `${Math.round(a / 1440)} ${t("Tagen")}`;
+  if (!v) return t("gerade eben");
+  return diff < 0 ? t("vor {v}", { v }) : t("in {v}", { v });
+}
+
+// ---------------- API ----------------
+async function api(path, opts = {}) {
+  const r = await fetch("api/" + path, {
+    method: opts.method || "GET",
+    headers: { "X-App": "1", ...(opts.body ? { "content-type": "application/json" } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined, credentials: "same-origin" });
+  if (r.status === 401) { location.href = "login"; throw new Error("nicht angemeldet"); }
+  const data = (r.headers.get("content-type") || "").includes("json") ? await r.json() : await r.text();
+  if (!r.ok) throw new Error((data && data.error) || "HTTP " + r.status);
+  return data;
+}
+
+let toastT;
+function toast(msg, isErr) {
+  document.querySelector(".toast")?.remove(); clearTimeout(toastT);
+  const d = document.createElement("div");
+  d.className = "toast" + (isErr ? " err" : ""); d.setAttribute("role", "status"); d.textContent = msg;
+  document.body.appendChild(d); toastT = setTimeout(() => d.remove(), isErr ? 6000 : 3000);
+}
+function ask(title, text, ok = "OK", danger = false) {
+  return new Promise(res => {
+    const d = $("confirmDlg");
+    $("confirmTitle").textContent = title; $("confirmText").textContent = text;
+    $("confirmYes").textContent = ok; $("confirmYes").className = "btn " + (danger ? "danger-fill" : "primary");
+    const done = v => { d.close(); res(v); };
+    $("confirmYes").onclick = () => done(true); $("confirmNo").onclick = () => done(false);
+    d.oncancel = e => { e.preventDefault(); done(false); };
+    d.showModal(); $("confirmYes").focus();
+  });
+}
+async function busy(btn, text, fn) {
+  const old = btn.innerHTML; btn.disabled = true; btn.textContent = text;
+  try { return await fn(); } finally { btn.disabled = false; btn.innerHTML = old; }
+}
+document.querySelectorAll("dialog").forEach(d => d.addEventListener("click", e => { if (e.target.closest("[data-close]")) d.close(); }));
+
+// ---------------- Zustand ----------------
+let S = null, R = [], view = "start", filter = "all", sortAsc = false, page = 0, perPage = 25;
+try { view = localStorage.getItem("mer-view") || "start"; filter = localStorage.getItem("mer-filter") || "all";
+  perPage = +localStorage.getItem("mer-per") || 25; } catch {}
+
+function show(v) {
+  view = v; try { localStorage.setItem("mer-view", v); } catch {}
+  document.querySelectorAll("[data-v]").forEach(s => s.hidden = s.id !== "view-" + v);
+  document.querySelectorAll(".app-nav button").forEach(b => b.dataset.view === v ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  render();
+}
+document.querySelectorAll(".app-nav button").forEach(b => b.onclick = () => show(b.dataset.view));
+document.querySelectorAll("[data-view-link]").forEach(b => b.onclick = () => show(b.dataset.viewLink));
+
+async function load(full = true) {
+  try {
+    const [s, r] = await Promise.all([api("state"), full ? api("reports") : Promise.resolve(R)]);
+    const first = !S; S = s; R = r;
+    if (first) { LANG = s.lang; document.documentElement.lang = LANG; translateDom(); fillForms(); }
+    render();
+    $("stand").textContent = t("Aktualisiert sich alle 30 s · Stand {t}", { t: new Date().toLocaleTimeString(loc()) });
+  } catch (e) {
+    $("haDot").className = "dot bad"; $("haText").textContent = t("Server nicht erreichbar");
+  }
+  clearTimeout(load.t); load.t = setTimeout(load, S && S.running ? 3000 : 30000);
+}
+
+// ---------------- Darstellung ----------------
+const SRC = [["pv", "PV"], ["bezug", "Netz"], ["laden", "Batterie"], ["wasser", "Wasser"]];
+function sourcesHtml() {
+  const b = SRC.filter(([k]) => S.sources[k] || (k === "laden" && S.sources.entladen)).map(([, n]) => `<span class="badge">${esc(t(n))}</span>`);
+  return b.length ? `<span class="sources">${b.join("")}</span>` : `<span class="dimmed">${t("keine")}</span>`;
+}
+function statusPill(r) {
+  if (S.running === r.id) return `<span class="pill accent">${t("wird erstellt")}</span>`;
+  return r.status === "ok" ? `<span class="pill ok">${t("Erstellt")}</span>` : `<span class="pill bad" title="${esc(r.error)}">${t("Fehler")}</span>`;
+}
+function sentHtml(r) {
+  const p = [];
+  for (const [k, n] of [["push", "Push"], ["email", "E-Mail"]]) {
+    const v = (r.sent || {})[k]; if (!v) continue;
+    p.push(v === "ok" ? `<span class="pill ok">${t(n)}</span>` : `<span class="pill bad" title="${esc(v)}">${t(n)}</span>`);
+  }
+  return p.length ? `<span class="sent">${p.join("")}</span>` : `<span class="dimmed">–</span>`;
+}
+function thumb(r) {
+  if (r.status !== "ok" || !r.pages) return `<span class="thumb ph" aria-hidden="true"></span>`;
+  return `<button class="thumb" data-prev="${esc(r.id)}" aria-label="${esc(t("Vorschau von KW {kw}", { kw: r.kw }))}" title="${esc(t("Vorschau"))}"><img src="api/reports/${encodeURIComponent(r.id)}/page/1?v=${encodeURIComponent(r.created)}" alt="" loading="lazy"></button>`;
+}
+function weekCell(r) {
+  const how = r.trigger === "schedule" ? t("Zeitplan") : t("manuell");
+  const sub = r.status === "ok" ? `${t("erstellt")} ${dt(r.created)} · ${how}` : esc(r.error || "");
+  return `<div class="wk"><div class="t">${t("KW")} ${r.kw} · ${range(r)}</div><div class="sub" title="${r.status === "ok" ? "" : esc(r.error || "")}">${sub}</div></div>`;
+}
+function actions(r, full) {
+  const id = encodeURIComponent(r.id), ok = r.status === "ok";
+  let h = "";
+  if (ok) h += `<a class="icon-btn" href="api/reports/${id}/pdf?download=1" download aria-label="${t("Herunterladen")}" title="${t("Herunterladen")}">${IC.dl}</a>`;
+  if (full && ok) h += `<button class="icon-btn" data-send="${esc(r.id)}" aria-label="${t("Erneut senden")}" title="${t("Erneut senden")}">${IC.send}</button>`;
+  if (full) h += `<button class="icon-btn" data-redo="${esc(r.von)}" aria-label="${t("Neu erstellen")}" title="${t("Neu erstellen")}">${IC.redo}</button>`;
+  if (full) h += `<button class="icon-btn danger" data-del="${esc(r.id)}" aria-label="${t("Löschen")}" title="${t("Löschen")}">${IC.del}</button>`;
+  return `<span class="row-actions">${h}</span>`;
+}
+const kwh = v => v == null ? `<span class="dimmed">–</span>` : `${fmt(v)} kWh`;
+
+function render() {
+  if (!S) return;
+  // Kopfzeile
+  $("navCount").textContent = R.length;
+  $("haDot").className = "dot " + (S.connected ? "ok" : "bad");
+  $("haText").textContent = S.connected ? t("Mit Home Assistant verbunden") : t("Home Assistant nicht erreichbar");
+  $("runState").hidden = !S.running;
+  if (S.running) $("runText").textContent = t("Erstelle Bericht {id} …", { id: S.running.replace(/^\d+-W/, t("KW") + " ") });
+  $("haNotice").hidden = S.connected && Object.values(S.sources).some(Boolean);
+  $("haNoticeText").textContent = !S.connected ? t("Home Assistant ist nicht erreichbar: {e}", { e: S.ha_error || "" })
+    : t("Im Energie-Dashboard sind keine Quellen eingerichtet. Richte es unter Einstellungen → Dashboards → Energie ein.");
+  $("ver").textContent = S.version;
+  if (view === "start") renderStart();
+  if (view === "reports") renderReports();
+  if (view === "settings") renderSettings();
+}
+
+function plan() {
+  if (!S.next_run) return t("Zeitplan aus");
+  return `${WD()[S.settings.weekday]} ${S.settings.time}`;
+}
+
+function renderStart() {
+  const ok = R.filter(r => r.status === "ok"), last = R.slice().sort((a, b) => b.created.localeCompare(a.created))[0];
+  const newest = ok[0], k = newest?.kpi || {};
+  const oldest = R.length ? R[R.length - 1] : null;
+  $("startFacts").innerHTML = `<span><b>${R.length}</b> ${t(R.length === 1 ? "Bericht" : "Berichte")}</span><span><b>${size(S.storage)}</b> ${t("belegt")}</span><span>${t("Zeitplan")}: <b>${esc(plan())}</b></span>`;
+  const nTargets = (S.settings.push || []).length + (S.settings.email || []).length;
+  const sentErr = newest && Object.values(newest.sent || {}).some(v => v !== "ok");
+  const pvDelta = k.pv != null && k.pv_vw ? (k.pv / k.pv_vw - 1) * 100 : null;
+  const kpis = [
+    ["", t("Berichte"), R.length, oldest ? t("seit {d}", { d: dmy(day(oldest.von)) }) : t("noch keiner erstellt")],
+    [last && last.status !== "ok" ? "bad" : "", t("Letzter Bericht"), last ? `${t("KW")} ${last.kw}` : "–",
+      last ? (last.status === "ok" ? `${dt(last.created)} · ${rel(last.created)}` : t("Fehler: {e}", { e: last.error || "" })) : t("noch keiner erstellt")],
+    [S.running ? "accent" : "", t("Nächster Lauf"), S.running ? t("läuft") : S.next_run ? `${wd(new Date(S.next_run))} ${dm(new Date(S.next_run))}` : t("aus"),
+      S.next_run ? `${hm(new Date(S.next_run))} · ${rel(S.next_run)}` : t("Zeitplan ausgeschaltet")],
+    ["", t("PV letzte Woche"), k.pv != null ? `${fmt(k.pv)} kWh` : "–",
+      pvDelta != null ? t("{p} zur Vorwoche", { p: (pvDelta >= 0 ? "+" : "") + fmt(pvDelta, 0) + " %" }) : (newest ? `${t("KW")} ${newest.kw}` : "–")],
+    ["", t("Autarkie"), k.autarkie != null ? `${fmt(k.autarkie, 0)} %` : "–",
+      k.verbrauch != null ? t("Verbrauch {v} kWh", { v: fmt(k.verbrauch) }) : "–"],
+    [sentErr ? "bad" : "", t("Empfänger"), nTargets,
+      sentErr ? t("letzter Versand fehlerhaft") : t("{p} Push · {m} E-Mail", { p: (S.settings.push || []).length, m: (S.settings.email || []).length })],
+  ];
+  $("kpis").innerHTML = kpis.map(([c, l, v, s]) => `<div class="card kpi ${c}"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s)}</div></div>`).join("");
+
+  const rows = R.slice(0, 5);
+  $("lastBody").innerHTML = rows.length ? rows.map(r => `<tr><td class="th-cell">${thumb(r)}</td><td>${weekCell(r)}</td><td>${statusPill(r)}</td>
+    <td class="num">${kwh(r.kpi?.pv)}</td><td class="num">${kwh(r.kpi?.verbrauch)}</td><td class="num">${actions(r, false)}</td></tr>`).join("")
+    : `<tr><td colspan="6" class="empty">${t("Noch keine Berichte. Erstelle einen mit „Bericht erstellen“.")}</td></tr>`;
+
+  const tz = S.settings;
+  $("statusKv").innerHTML = `
+    <dt>${t("Home Assistant")}</dt><dd>${S.connected ? `<span class="pill ok">${t("verbunden")}</span>` : `<span class="pill bad">${t("getrennt")}</span>`}</dd>
+    <dt>${t("Quellen")}</dt><dd>${sourcesHtml()}</dd>
+    <dt>${t("Zeitplan")}</dt><dd>${S.next_run ? esc(`${WD_LONG()[tz.weekday]}, ${tz.time}`) : `<span class="pill">${t("aus")}</span>`}</dd>
+    <dt>${t("Push")}</dt><dd>${(tz.push || []).length ? esc(tz.push.map(nameOf).join(", ")) : `<span class="dimmed">–</span>`}</dd>
+    <dt>${t("E-Mail")}</dt><dd>${(tz.email || []).length ? esc(tz.email.map(nameOf).join(", ")) : `<span class="dimmed">–</span>`}</dd>
+    <dt>${t("Ablage")}</dt><dd><code>${esc(S.folder)}</code></dd>`;
+  chart();
+}
+const nameOf = id => (S.targets.email.find(x => x.id === id) || S.targets.push.find(x => x.id === id) || {}).name || id;
+
+function chart() {
+  const data = R.filter(r => r.status === "ok").slice(0, 12).reverse();
+  const el = $("chart");
+  if (data.length < 2) { el.innerHTML = `<div class="empty">${t("Der Verlauf erscheint ab zwei Berichten.")}</div>`; return; }
+  const W = Math.max(el.clientWidth, 300), H = 220, L = 40, B = 24, T = 8, pw = W - L - 8, ph = H - B - T;
+  const max = Math.max(...data.flatMap(r => [r.kpi.pv || 0, r.kpi.verbrauch || 0]), 1);
+  const step = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(s => max / s <= 4) || 2000;
+  const top = Math.ceil(max / step) * step, y = v => T + ph - ph * v / top;
+  let g = "";
+  for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W - 8}" y1="${y(v)}" y2="${y(v)}" stroke="var(${v ? "--grid" : "--axis"})"/><text class="tick" x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${fmt(v, 0)}</text>`;
+  const slot = pw / data.length, bw = Math.min(16, slot * 0.3);
+  const bar = (x, v, c) => { if (!v) return ""; const y1 = y(v), y0 = y(0), r = Math.min(4, y0 - y1);
+    return `<path fill="var(${c})" d="M${x},${y0} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + bw - r} Q${x + bw},${y1} ${x + bw},${y1 + r} V${y0} Z"/>`; };
+  data.forEach((r, i) => {
+    const cx = L + slot * i + slot / 2;
+    g += bar(cx - bw - 1, r.kpi.pv, "--s1") + bar(cx + 1, r.kpi.verbrauch, "--s2");
+    const lab = slot < 46 ? String(r.kw) : `${t("KW")} ${r.kw}`, every = Math.ceil(24 / slot);
+    if ((data.length - 1 - i) % every === 0) g += `<text class="tick" x="${cx}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
+    g += `<rect x="${L + slot * i}" y="${T}" width="${slot}" height="${ph}" fill="transparent" data-i="${i}"/>`;
+  });
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(t("PV-Erzeugung und Hausverbrauch je Woche"))}">${g}</svg><div class="tip" id="tip"></div>`;
+  const tip = $("tip");
+  el.querySelectorAll("rect[data-i]").forEach(rc => {
+    const show = () => { const r = data[+rc.dataset.i], box = el.getBoundingClientRect(), b = rc.getBoundingClientRect();
+      tip.innerHTML = `<div class="t">${t("KW")} ${r.kw} · ${range(r)}</div>
+        <div class="row"><span><i style="background:var(--s1)"></i>${t("PV-Erzeugung")}</span><b>${kwh(r.kpi.pv)}</b></div>
+        <div class="row"><span><i style="background:var(--s2)"></i>${t("Hausverbrauch")}</span><b>${kwh(r.kpi.verbrauch)}</b></div>`;
+      tip.style.display = "block";
+      const x = Math.min(Math.max(b.left - box.left + b.width / 2 - tip.offsetWidth / 2, 0), box.width - tip.offsetWidth);
+      tip.style.left = x + "px"; tip.style.top = "0px"; };
+    rc.addEventListener("mouseenter", show); rc.addEventListener("click", show);
+    rc.addEventListener("mouseleave", () => tip.style.display = "none");
+  });
+}
+
+function renderReports() {
+  const ok = R.filter(r => r.status === "ok").length;
+  $("repFacts").innerHTML = `<span><b>${R.length}</b> ${t(R.length === 1 ? "Bericht" : "Berichte")}</span><span><b>${size(S.storage)}</b> ${t("belegt")}</span>`
+    + (R.length - ok ? `<span><span class="dot bad"></span> <b>${R.length - ok}</b> ${t("mit Fehler")}</span>` : "");
+  document.querySelectorAll("#filterSeg button").forEach(b => b.setAttribute("aria-pressed", b.dataset.f === filter));
+  let list = R.filter(r => filter === "all" || r.status === filter);
+  if (sortAsc) list = list.slice().reverse();
+  $("sortBtn").textContent = t("Woche") + (sortAsc ? " ↑" : " ↓"); $("sortBtn").setAttribute("aria-sort", sortAsc ? "ascending" : "descending");
+  const per = perPage || list.length || 1, pages = Math.max(1, Math.ceil(list.length / per));
+  page = Math.min(page, pages - 1);
+  const rows = list.slice(page * per, page * per + per);
+  $("repBody").innerHTML = rows.length ? rows.map(r => `<tr><td class="th-cell">${thumb(r)}</td><td>${weekCell(r)}</td><td>${statusPill(r)}</td>
+      <td class="num">${kwh(r.kpi?.pv)}</td><td class="num">${kwh(r.kpi?.verbrauch)}</td>
+      <td class="num">${r.kpi?.autarkie != null ? fmt(r.kpi.autarkie, 0) + " %" : '<span class="dimmed">–</span>'}</td>
+      <td class="num">${r.kpi?.wasser != null ? fmt(r.kpi.wasser, 0) + " L" : '<span class="dimmed">–</span>'}</td>
+      <td class="num">${sentHtml(r)}</td><td class="num">${actions(r, true)}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="empty">${R.length ? t("Keine Berichte passen zum Filter.") : t("Noch keine Berichte. Erstelle einen mit „Bericht erstellen“.")}</td></tr>`;
+  const a = list.length ? page * per + 1 : 0, b = Math.min(list.length, page * per + per);
+  $("pager").innerHTML = `<span>${t("{a}–{b} von {n}", { a, b, n: list.length })}</span><span class="right">${t("pro Seite")}
+    <select id="perSel" style="width:auto;padding:5px 8px;font-size:13px" aria-label="${t("pro Seite")}">${[10, 25, 50, 100, 0].map(n => `<option value="${n}" ${n === perPage ? "selected" : ""}>${n || t("alle")}</option>`).join("")}</select>
+    <button class="icon-btn" id="pgPrev" aria-label="${t("Vorherige Seite")}" title="${t("Vorherige Seite")}" ${page ? "" : "disabled"}>${IC.prev}</button>
+    <span style="padding:0 6px">${t("Seite {p} von {n}", { p: page + 1, n: pages })}</span>
+    <button class="icon-btn" id="pgNext" aria-label="${t("Nächste Seite")}" title="${t("Nächste Seite")}" ${page < pages - 1 ? "" : "disabled"}>${IC.next}</button></span>`;
+  $("perSel").onchange = e => { perPage = +e.target.value; page = 0; try { localStorage.setItem("mer-per", perPage); } catch {} renderReports(); };
+  $("pgPrev").onclick = () => { page--; renderReports(); };
+  $("pgNext").onclick = () => { page++; renderReports(); };
+}
+$("filterSeg").onclick = e => { const b = e.target.closest("button"); if (!b) return; filter = b.dataset.f; page = 0;
+  try { localStorage.setItem("mer-filter", filter); } catch {} renderReports(); };
+$("sortBtn").onclick = () => { sortAsc = !sortAsc; renderReports(); };
+
+// Zeilenaktionen (beide Tabellen)
+document.addEventListener("click", async e => {
+  const pv = e.target.closest("[data-prev]"), sd = e.target.closest("[data-send]"), dl = e.target.closest("[data-del]"), rd = e.target.closest("[data-redo]");
+  if (pv) return preview(pv.dataset.prev);
+  if (sd) { const r = R.find(x => x.id === sd.dataset.send);
+    try { await busy(sd, "…", () => api(`reports/${encodeURIComponent(r.id)}/send`, { method: "POST", body: {} }));
+      toast(t("KW {kw} verschickt", { kw: r.kw })); load(); } catch (err) { toast(err.message, true); } }
+  if (dl) { const r = R.find(x => x.id === dl.dataset.del);
+    if (!await ask(t("Bericht löschen?"), t("Der Bericht für KW {kw} ({r}) wird endgültig gelöscht.", { kw: r.kw, r: range(r) }), t("Löschen"), true)) return;
+    try { await api(`reports/${encodeURIComponent(r.id)}`, { method: "DELETE" }); toast(t("Bericht gelöscht")); load(); } catch (err) { toast(err.message, true); } }
+  if (rd) openCreate(rd.dataset.redo);
+});
+
+function preview(id) {
+  const r = R.find(x => x.id === id); if (!r) return;
+  $("prevTitle").textContent = `${t("KW")} ${r.kw} · ${range(r)}`;
+  $("prevPages").innerHTML = Array.from({ length: r.pages }, (_, i) =>
+    `<img src="api/reports/${encodeURIComponent(r.id)}/page/${i + 1}?v=${encodeURIComponent(r.created)}" alt="${esc(t("Seite {n}", { n: i + 1 }))}">`).join("");
+  $("prevInfo").textContent = `${t("{n} Seiten", { n: r.pages })} · ${size(r.size)} · ${r.file}`;
+  $("prevOpen").href = `api/reports/${encodeURIComponent(r.id)}/pdf`;
+  $("prevDl").href = `api/reports/${encodeURIComponent(r.id)}/pdf?download=1`; $("prevDl").setAttribute("download", r.file);
+  $("prevDlg").showModal(); $("prevDl").focus();
+}
+
+// ---------------- Bericht erstellen ----------------
+function weeks() {
+  const now = new Date(), d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7);
+  return Array.from({ length: 26 }, (_, i) => { const m = new Date(d); m.setDate(d.getDate() - 7 * i); return m; });
+}
+const iso = d => `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+function isoWeek(d) { const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 3)); const y0 = new Date(Date.UTC(x.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((x - y0) / 864e5 - 3 + ((y0.getUTCDay() + 6) % 7)) / 7); }
+function openCreate(von) {
+  const have = new Set(R.map(r => r.von));
+  $("weekSel").innerHTML = weeks().map(m => { const e = new Date(m); e.setDate(m.getDate() + 6);
+    return `<option value="${iso(m)}">${t("KW")} ${isoWeek(m)} · ${dm(m)}–${dmy(e)}${have.has(iso(m)) ? " · " + t("vorhanden") : ""}</option>`; }).join("");
+  if (von) $("weekSel").value = von;
+  const n = (S.settings.push || []).length + (S.settings.email || []).length;
+  $("sendChk").checked = false; $("sendChk").disabled = !n;
+  $("sendHint").textContent = n ? t("An {p} Push- und {m} E-Mail-Empfänger aus den Einstellungen.", { p: (S.settings.push || []).length, m: (S.settings.email || []).length })
+    : t("Lege zuerst unter Einstellungen → Versand Empfänger fest.");
+  $("createErr").hidden = true; updCreate();
+  $("createDlg").showModal(); $("weekSel").focus();
+}
+function updCreate() { const have = R.some(r => r.von === $("weekSel").value);
+  $("createInfo").textContent = have ? t("Der vorhandene Bericht wird ersetzt.") : ""; }
+$("weekSel").onchange = updCreate;
+document.querySelectorAll("[data-create]").forEach(b => b.onclick = () => openCreate());
+$("createForm").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const r = await busy($("createBtn"), t("erstelle …"), () => api("reports", { method: "POST", body: { week: $("weekSel").value, send: $("sendChk").checked } }));
+    $("createDlg").close();
+    if (r.status === "ok") toast(t("Bericht KW {kw} erstellt", { kw: r.kw })); else toast(t("Bericht fehlgeschlagen: {e}", { e: r.error }), true);
+    load();
+  } catch (err) { $("createErr").textContent = err.message; $("createErr").hidden = false; }
+};
+
+// ---------------- Einstellungen ----------------
+function fillForms() {
+  const s = S.settings, pf = $("planForm"), rf = $("repForm");
+  pf.weekday.innerHTML = WD_LONG().map((n, i) => `<option value="${i}">${n}</option>`).join("");
+  pf.enabled.checked = !!s.enabled; pf.weekday.value = s.weekday; pf.time.value = s.time;
+  rf.plant_name.value = s.plant_name || ""; rf.kwp.value = s.kwp ?? ""; rf.keep_weeks.value = s.keep_weeks; rf.language.value = s.language;
+  targets();
+  planPreview();
+}
+function targets() {
+  const s = S.settings;
+  const list = (items, sel, name, empty) => items.length ? items.map(x => `<label class="check"><input type="checkbox" name="${name}" value="${esc(x.id)}" ${sel.includes(x.id) ? "checked" : ""}><span>${esc(x.name)}</span> <code class="hint">${esc(name === "push" ? "notify." + x.id : x.id)}</code></label>`).join("")
+    : `<p class="hint" style="margin:0">${empty}</p>`;
+  $("pushList").innerHTML = list(S.targets.push, s.push || [], "push", t("Keine Geräte mit Companion-App gefunden."));
+  $("mailList").innerHTML = list(S.targets.email, s.email || [], "email",
+    t("Keine SMTP-Empfänger gefunden. Richte unter Einstellungen → Geräte & Dienste die SMTP-Integration ein und lege dort einen Empfänger an."));
+}
+function planPreview() {
+  const f = $("planForm");
+  if (!f.enabled.checked) { $("planPreview").textContent = t("Der Zeitplan ist ausgeschaltet. Berichte entstehen nur über „Bericht erstellen“."); return; }
+  const [h, m] = (f.time.value || "06:30").split(":").map(Number), now = new Date(), wdN = +f.weekday.value;
+  const n = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m); n.setDate(n.getDate() + ((wdN - (n.getDay() + 6) % 7) + 7) % 7);
+  if (n <= now) n.setDate(n.getDate() + 7);
+  const mo = new Date(n); mo.setDate(n.getDate() - ((n.getDay() + 6) % 7) - 7); const so = new Date(mo); so.setDate(mo.getDate() + 6);
+  $("planPreview").textContent = t("Nächster Lauf: {d} · Bericht für KW {kw} ({r})", { d: `${wd(n)} ${dm(n)} ${hm(n)}`, kw: isoWeek(mo), r: `${dm(mo)}–${dmy(so)}` });
+}
+$("planForm").addEventListener("input", planPreview);
+function renderSettings() {
+  $("infoKv").innerHTML = `
+    <dt>${t("Version")}</dt><dd>${esc(S.version)}</dd>
+    <dt>${t("Home Assistant")}</dt><dd>${S.connected ? `<span class="pill ok">${t("verbunden")}</span>` : `<span class="pill bad">${t("getrennt")}</span>`}</dd>
+    <dt>${t("Quellen")}</dt><dd>${sourcesHtml()}</dd>
+    <dt>${t("Ablage")}</dt><dd><code>${esc(S.folder)}</code></dd>
+    <dt>${t("Belegt")}</dt><dd>${size(S.storage)} · ${R.length} ${t(R.length === 1 ? "Bericht" : "Berichte")}</dd>`;
+}
+async function save(form, body, errEl) {
+  const btn = form.querySelector("button[type=submit]");
+  if (errEl) errEl.hidden = true;
+  try { S = await busy(btn, t("speichere …"), () => api("settings", { method: "PUT", body }));
+    toast(t("Einstellungen gespeichert")); render(); planPreview();
+    if (S.lang !== LANG) location.reload();
+  } catch (e) { if (errEl) { errEl.textContent = e.message; errEl.hidden = false; } else toast(e.message, true); }
+}
+$("planForm").onsubmit = e => { e.preventDefault(); const f = e.target;
+  save(f, { enabled: f.enabled.checked, weekday: +f.weekday.value, time: f.time.value }); };
+$("repForm").onsubmit = e => { e.preventDefault(); const f = e.target;
+  save(f, { plant_name: f.plant_name.value, kwp: f.kwp.value === "" ? null : +f.kwp.value, keep_weeks: +f.keep_weeks.value, language: f.language.value }, $("repErr")); };
+const picked = n => [...document.querySelectorAll(`#sendForm input[name=${n}]:checked`)].map(x => x.value);
+$("sendForm").onsubmit = e => { e.preventDefault(); save(e.target, { push: picked("push"), email: picked("email") }, $("sendErr")); };
+async function test(btn, art) {
+  try { await busy(btn, t("sende …"), async () => {
+      await api("settings", { method: "PUT", body: { push: picked("push"), email: picked("email") } });
+      await api("test/" + art, { method: "POST", body: {} }); });
+    toast(art === "push" ? t("Test-Push verschickt") : t("Test-E-Mail verschickt"));
+  } catch (e) { toast(e.message, true); }
+}
+$("testPush").onclick = e => test(e.currentTarget, "push");
+$("testMail").onclick = e => test(e.currentTarget, "email");
+$("retryBtn").onclick = async e => { try { S = await busy(e.currentTarget, t("verbinde …"), () => api("refresh", { method: "POST", body: {} })); targets(); render(); } catch (err) { toast(err.message, true); } };
+
+let rsT; addEventListener("resize", () => { clearTimeout(rsT); rsT = setTimeout(() => view === "start" && S && chart(), 150); });
+show(["start", "reports", "settings"].includes(view) ? view : "start");
+load();
+</script>
+</body>
+</html>
